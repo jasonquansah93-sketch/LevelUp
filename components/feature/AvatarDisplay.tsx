@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { AvatarConfig } from '@/contexts/GameContext';
 import { Colors, Radius, FontSize, FontWeight } from '@/constants/theme';
@@ -38,23 +39,41 @@ export function AvatarDisplay({ avatar, level, size = 'md', showLevel = true }: 
   const dims = SIZES[size];
   const skinColor = SKIN_COLORS[avatar.skinTone] || SKIN_COLORS.tone2;
   const clothingColor = CLOTHING_COLORS[avatar.clothingStyle] || CLOTHING_COLORS.casual;
+  const hasPhoto = !!avatar.photoUrl;
 
   return (
     <View style={[styles.wrapper, { width: dims.outer, height: dims.outer }]}>
-      <View
-        style={[
-          styles.avatar,
-          {
-            width: dims.outer,
-            height: dims.outer,
-            borderRadius: dims.outer / 2,
-            backgroundColor: clothingColor,
-            borderColor: Colors.gold + '60',
-          },
-        ]}
-      >
-        <MaterialIcons name="person" size={dims.icon} color={skinColor} />
-      </View>
+      {hasPhoto ? (
+        <Image
+          source={{ uri: avatar.photoUrl }}
+          style={[
+            styles.avatar,
+            {
+              width: dims.outer,
+              height: dims.outer,
+              borderRadius: dims.outer / 2,
+              borderColor: Colors.gold + '80',
+            },
+          ]}
+          contentFit="cover"
+          transition={200}
+        />
+      ) : (
+        <View
+          style={[
+            styles.avatar,
+            {
+              width: dims.outer,
+              height: dims.outer,
+              borderRadius: dims.outer / 2,
+              backgroundColor: clothingColor,
+              borderColor: Colors.gold + '60',
+            },
+          ]}
+        >
+          <MaterialIcons name="person" size={dims.icon} color={skinColor} />
+        </View>
+      )}
       {showLevel && (
         <View style={[styles.levelBadge, { bottom: -2, right: -2 }]}>
           <Text style={[styles.levelText, { fontSize: dims.level }]}>{level}</Text>

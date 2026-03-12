@@ -10,6 +10,7 @@ export interface AvatarConfig {
   clothingStyle: string;
   bodyType: string;
   name: string;
+  photoUrl?: string;
 }
 
 export interface ActiveCategory {
@@ -87,6 +88,7 @@ const DEFAULT_AVATAR: AvatarConfig = {
   clothingStyle: 'casual',
   bodyType: 'average',
   name: 'Your Character',
+  photoUrl: undefined,
 };
 
 const DEFAULT_STREAK: StreakData = {
@@ -205,6 +207,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         clothingStyle: avatarRes.data.clothing_style,
         bodyType: avatarRes.data.body_type,
         name: avatarRes.data.name,
+        photoUrl: avatarRes.data.photo_url || undefined,
       } : DEFAULT_AVATAR;
 
       const activeCategories: ActiveCategory[] = (categoriesRes.data || []).map((r: any) => ({
@@ -297,6 +300,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       clothing_style: avatar.clothingStyle,
       body_type: avatar.bodyType,
       name: avatar.name,
+      photo_url: avatar.photoUrl || null,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' });
   };
