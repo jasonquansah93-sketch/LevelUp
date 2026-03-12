@@ -43,7 +43,16 @@ export default function TargetSetup() {
     const activeQuests: ActiveQuest[] = [];
     for (const catId of selectedCategories) {
       const questIds = selectedQuestsMap[catId] || [];
-      for (const questId of questIds) {
+      // If no quests selected for category, auto-add the top 2 easiest ones
+      const idsToUse = questIds.length > 0
+        ? questIds
+        : QUEST_TEMPLATES
+          .filter((q) => q.categoryId === catId)
+          .sort((a, b) => a.characterXp - b.characterXp)
+          .slice(0, 2)
+          .map((q) => q.id);
+
+      for (const questId of idsToUse) {
         const template = QUEST_TEMPLATES.find((q) => q.id === questId);
         if (template) {
           activeQuests.push({
@@ -75,10 +84,9 @@ export default function TargetSetup() {
       </View>
 
       <View style={styles.header}>
-        <Text style={styles.title}>Set Your Intensity</Text>
+        <Text style={styles.title}>Set your intensity</Text>
         <Text style={styles.subtitle}>
-          Choose how ambitious your weekly targets are. Your ranking is always fair — it measures
-          you against your own target.
+          How ambitious do you want to be this week? You can always adjust this later.
         </Text>
       </View>
 
@@ -99,7 +107,7 @@ export default function TargetSetup() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.catName}>{cat.name}</Text>
                   <Text style={styles.catTarget}>
-                    Target: {cat.weeklyTargetCredits[intensity]} credits/week
+                    {cat.weeklyTargetCredits[intensity]} credits/week target
                   </Text>
                 </View>
               </View>
@@ -107,7 +115,11 @@ export default function TargetSetup() {
                 {(['light', 'standard', 'focused'] as Intensity[]).map((level) => (
                   <Pressable
                     key={level}
-                    style={[styles.intensityChip, intensity === level && { backgroundColor: color, borderColor: color }]}
+                    style={({ pressed }) => [
+                      styles.intensityChip,
+                      intensity === level && { backgroundColor: color, borderColor: color },
+                      pressed && styles.pressed,
+                    ]}
                     onPress={() => setIntensity(catId, level)}
                   >
                     <Text style={[styles.intensityText, intensity === level && styles.intensityTextActive]}>
@@ -119,6 +131,15 @@ export default function TargetSetup() {
             </View>
           );
         })}
+
+        {/* Summary */}
+        <View style={styles.summaryCard}>
+          <MaterialIcons name="info-outline" size={18} color={Colors.info} />
+          <Text style={styles.summaryText}>
+            Your rank is always measured against your own target — not against others with different categories.
+          </Text>
+        </View>
+
         <View style={{ height: 120 }} />
       </ScrollView>
 
@@ -146,19 +167,28 @@ const styles = StyleSheet.create({
   title: { fontSize: FontSize.xxl, fontWeight: FontWeight.heavy, color: Colors.textPrimary },
   subtitle: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },
   scroll: { padding: Spacing.xl, paddingTop: Spacing.sm, gap: Spacing.md },
-  catCard: { backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder, gap: Spacing.md },
+  catCard: {
+    backgroundColor: Colors.surface, borderRadius: Radius.lg,
+    padding: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder, gap: Spacing.md,
+  },
   catHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   catIcon: { width: 44, height: 44, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
   catName: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   catTarget: { fontSize: FontSize.sm, color: Colors.textSecondary },
   intensityRow: { flexDirection: 'row', gap: Spacing.sm },
   intensityChip: {
-    flex: 1, height: 38, borderRadius: Radius.round,
+    flex: 1, height: 40, borderRadius: Radius.round,
     backgroundColor: Colors.surfaceElevated, borderWidth: 1.5, borderColor: Colors.surfaceBorder,
     alignItems: 'center', justifyContent: 'center',
   },
   intensityText: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textSecondary },
   intensityTextActive: { color: '#fff' },
+  summaryCard: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm,
+    backgroundColor: Colors.infoSoft, borderRadius: Radius.md,
+    padding: Spacing.md, borderWidth: 1, borderColor: Colors.info + '30',
+  },
+  summaryText: { fontSize: FontSize.sm, color: Colors.info, flex: 1, lineHeight: 20 },
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     padding: Spacing.xl, backgroundColor: Colors.bg,

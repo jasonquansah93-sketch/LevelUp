@@ -6,13 +6,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Spacing, FontSize, FontWeight, Radius } from '@/constants/theme';
 
-const PILLARS = [
-  { icon: 'bolt', text: 'Earn XP from real-world actions' },
-  { icon: 'toll', text: 'Track weekly progress fairly across categories' },
-  { icon: 'local-fire-department', text: 'Build streaks. Stay consistent.' },
-  { icon: 'person', text: 'Watch your avatar evolve as you grow' },
-];
-
 export default function OnboardingIntro() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -27,31 +20,21 @@ export default function OnboardingIntro() {
       />
       <View style={styles.overlay} />
 
-      <View style={styles.content}>
-        <View style={styles.step}>
-          <Text style={styles.stepText}>Step 1 of 4</Text>
-          <View style={styles.stepDots}>
-            {[0, 1, 2, 3].map((i) => (
-              <View key={i} style={[styles.dot, i === 0 && styles.dotActive]} />
-            ))}
-          </View>
-        </View>
-
-        <Text style={styles.title}>This is your{'\n'}real-life character.</Text>
-        <Text style={styles.subtitle}>
-          Every action you take in the real world earns progress here. No shortcuts. No fakes.
-        </Text>
-
-        <View style={styles.pillars}>
-          {PILLARS.map((p) => (
-            <View key={p.text} style={styles.pillarRow}>
-              <View style={styles.pillarIcon}>
-                <MaterialIcons name={p.icon as any} size={18} color={Colors.gold} />
-              </View>
-              <Text style={styles.pillarText}>{p.text}</Text>
-            </View>
+      {/* Progress indicator */}
+      <View style={[styles.topBar, { top: insets.top + Spacing.md }]}>
+        <View style={styles.progressTrack}>
+          {[0, 1, 2, 3].map((i) => (
+            <View key={i} style={[styles.progressDot, i === 0 && styles.progressDotActive]} />
           ))}
         </View>
+        <Text style={styles.stepLabel}>1 of 4</Text>
+      </View>
+
+      <View style={styles.content}>
+        <Text style={styles.title}>This is your{'\n'}real-life character.</Text>
+        <Text style={styles.subtitle}>
+          Complete real actions. Earn XP. Level up who you actually are.
+        </Text>
 
         <Pressable
           style={({ pressed }) => [styles.btn, pressed && styles.pressed]}
@@ -67,40 +50,30 @@ export default function OnboardingIntro() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  heroImg: { position: 'absolute', top: 0, left: 0, right: 0, height: '50%' },
+  heroImg: { position: 'absolute', top: 0, left: 0, right: 0, height: '60%' },
   overlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, height: '60%',
-    backgroundColor: 'rgba(15,15,19,0.3)',
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(15,15,19,0.5)',
   },
+  topBar: {
+    position: 'absolute', left: Spacing.xl, right: Spacing.xl,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  progressTrack: { flexDirection: 'row', gap: 6 },
+  progressDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.3)' },
+  progressDotActive: { backgroundColor: Colors.gold, width: 24, borderRadius: 3 },
+  stepLabel: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.5)', fontWeight: FontWeight.medium },
   content: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    padding: Spacing.xl,
-    gap: Spacing.md,
+    flex: 1, justifyContent: 'flex-end', padding: Spacing.xl, gap: Spacing.md,
   },
-  step: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.sm,
+  title: {
+    fontSize: FontSize.xxxl, fontWeight: FontWeight.heavy,
+    color: Colors.textPrimary, lineHeight: 42,
   },
-  stepText: { fontSize: FontSize.sm, color: Colors.textMuted, fontWeight: FontWeight.medium },
-  stepDots: { flexDirection: 'row', gap: 6 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.surfaceBorder },
-  dotActive: { backgroundColor: Colors.gold, width: 18 },
-  title: { fontSize: FontSize.xxxl, fontWeight: FontWeight.heavy, color: Colors.textPrimary, lineHeight: 40 },
-  subtitle: { fontSize: FontSize.md, color: Colors.textSecondary, lineHeight: 24 },
-  pillars: { gap: Spacing.sm },
-  pillarRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  pillarIcon: {
-    width: 36, height: 36, borderRadius: Radius.sm,
-    backgroundColor: Colors.goldSoft, alignItems: 'center', justifyContent: 'center',
-  },
-  pillarText: { fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: FontWeight.medium, flex: 1 },
+  subtitle: { fontSize: FontSize.md, color: Colors.textSecondary, lineHeight: 24, marginBottom: Spacing.sm },
   btn: {
     backgroundColor: Colors.gold, height: 56, borderRadius: Radius.md,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm,
-    marginTop: Spacing.sm,
   },
   btnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textInverse },
   pressed: { opacity: 0.85, transform: [{ scale: 0.985 }] },
