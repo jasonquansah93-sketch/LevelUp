@@ -67,8 +67,8 @@ export default function TargetSetup() {
       }
     }
 
-    setActiveCategories(activeCategories);
-    setActiveQuests(activeQuests);
+    await setActiveCategories(activeCategories);
+    await setActiveQuests(activeQuests);
     await completeOnboarding();
     router.replace('/(tabs)');
   };

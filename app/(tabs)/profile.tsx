@@ -51,7 +51,7 @@ function ProfileRow({ icon, label, subtitle, color, onPress, isPremiumGate, isPr
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { user, logout } = useAuth();
+  const { user, logout, upgradeToPremium: authUpgrade } = useAuth();
   const { state, getXpInfo, upgradeToPremium } = useGame();
   const [paywallVisible, setPaywallVisible] = useState(false);
 
@@ -249,7 +249,7 @@ export default function ProfileScreen() {
       <PaywallModal
         visible={paywallVisible}
         onClose={() => setPaywallVisible(false)}
-        onUpgrade={() => { upgradeToPremium(); setPaywallVisible(false); }}
+        onUpgrade={() => { upgradeToPremium(); void authUpgrade(); setPaywallVisible(false); }}
       />
     </View>
   );

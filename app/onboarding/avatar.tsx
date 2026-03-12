@@ -41,8 +41,8 @@ export default function AvatarCreation() {
   const update = (key: keyof AvatarConfig, value: string) =>
     setConfig((p) => ({ ...p, [key]: value }));
 
-  const handleNext = () => {
-    setAvatar(config);
+  const handleNext = async () => {
+    await setAvatar(config);
     router.push('/onboarding/categories');
   };
 
@@ -168,7 +168,7 @@ export default function AvatarCreation() {
               </View>
               <Pressable
                 style={({ pressed }) => [styles.nextBtn, pressed && styles.pressed]}
-                onPress={handleNext}
+                onPress={() => void handleNext()}
               >
                 <Text style={styles.nextBtnText}>Choose Categories</Text>
                 <MaterialIcons name="arrow-forward" size={20} color={Colors.textInverse} />
@@ -177,7 +177,6 @@ export default function AvatarCreation() {
           )}
         </View>
 
-        {/* Generating modal */}
         <Modal transparent visible={generating} animationType="fade">
           <View style={styles.generatingOverlay}>
             <View style={styles.generatingCard}>
@@ -243,7 +242,7 @@ export default function AvatarCreation() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
         <Pressable
           style={({ pressed }) => [styles.nextBtn, pressed && styles.pressed]}
-          onPress={handleNext}
+          onPress={() => void handleNext()}
         >
           <Text style={styles.nextBtnText}>Choose Categories</Text>
           <MaterialIcons name="arrow-forward" size={20} color={Colors.textInverse} />
@@ -310,7 +309,6 @@ const styles = StyleSheet.create({
   stepLabel: { fontSize: FontSize.sm, color: Colors.textMuted, fontWeight: FontWeight.medium },
   scroll: { padding: Spacing.xl, gap: Spacing.lg },
 
-  // Choose path
   chooseContent: { flex: 1, padding: Spacing.xl, gap: Spacing.lg },
   chooseTitle: { fontSize: FontSize.xxxl, fontWeight: FontWeight.heavy, color: Colors.textPrimary, lineHeight: 38 },
   chooseSubtitle: { fontSize: FontSize.md, color: Colors.textSecondary, lineHeight: 22 },
@@ -334,7 +332,6 @@ const styles = StyleSheet.create({
   },
   recommendedText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textInverse },
 
-  // Photo path
   photoContent: { flex: 1, padding: Spacing.xl, gap: Spacing.lg },
   photoZone: { alignItems: 'center', gap: Spacing.md },
   photoPlaceholder: {
@@ -368,7 +365,6 @@ const styles = StyleSheet.create({
   skipPhotoBtn: { alignItems: 'center' },
   skipPhotoText: { fontSize: FontSize.sm, color: Colors.textMuted, fontWeight: FontWeight.medium },
 
-  // Generating modal
   generatingOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.85)',
     alignItems: 'center', justifyContent: 'center',
@@ -381,7 +377,6 @@ const styles = StyleSheet.create({
   generatingTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   generatingSubtitle: { fontSize: FontSize.sm, color: Colors.textSecondary },
 
-  // Shared
   avatarPreview: { alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.md },
   nameFieldWrap: { gap: Spacing.xs, width: '100%' },
   nameLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textSecondary },

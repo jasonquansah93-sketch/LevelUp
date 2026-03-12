@@ -1,6 +1,7 @@
-import React, { createContext, useState, ReactNode, useEffect, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
+import { getSupabaseClient } from '@/template';
 import { CATEGORIES, QUEST_TEMPLATES, getXpProgress } from '@/constants/gameData';
+import { AuthContext } from '@/contexts/AuthContext';
 
 export interface AvatarConfig {
   genderPresentation: string;
@@ -67,11 +68,11 @@ export interface GameState {
 interface GameContextType {
   state: GameState;
   isLoading: boolean;
-  setAvatar: (avatar: AvatarConfig) => void;
-  setActiveCategories: (categories: ActiveCategory[]) => void;
-  setActiveQuests: (quests: ActiveQuest[]) => void;
-  completeQuest: (questId: string) => QuestCompletion | null;
-  useStreakSaver: () => boolean;
+  setAvatar: (avatar: AvatarConfig) => Promise<void>;
+  setActiveCategories: (categories: ActiveCategory[]) => Promise<void>;
+  setActiveQuests: (quests: ActiveQuest[]) => Promise<void>;
+  completeQuest: (questId: string) => Promise<QuestCompletion | null>;
+  useStreakSaver: () => Promise<boolean>;
   upgradeToPremium: () => void;
   resetWeek: () => void;
   getXpInfo: () => { level: number; current: number; next: number; progress: number };
@@ -115,9 +116,9 @@ function getWeekStart(): string {
   const now = new Date();
   const day = now.getDay();
   const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(now.setDate(diff));
+  const monday = new Date(now.getFullYear(), now.getMonth(), diff);
   monday.setHours(0, 0, 0, 0);
-  return monday.toISOString();
+  return monday.toISOString().split('T')[0];
 }
 
 function getTodayString(): string {
@@ -129,21 +130,16 @@ function computeCategoryScores(
   weeklyCompletions: QuestCompletion[]
 ): { scores: WeeklyCategoryScore[]; fairnessScore: number } {
   const scores: WeeklyCategoryScore[] = activeCategories.map((ac) => {
-    const cat = CATEGORIES.find((c) => c.id === ac.categoryId);
-    if (!cat) return { categoryId: ac.categoryId, earnedCredits: 0, targetCredits: ac.weeklyTarget, completionPct: 0 };
-
     const earned = weeklyCompletions
       .filter((c) => c.categoryId === ac.categoryId)
       .reduce((sum, c) => sum + c.weeklyCredits, 0);
-
-    const capped = Math.min(earned, ac.weeklyTarget);
-    const completionPct = ac.weeklyTarget > 0 ? Math.min((earned / ac.weeklyTarget) * 100, 100) : 0;
-
+    const completionPct = ac.weeklyTarget > 0
+      ? Math.min((earned / ac.weeklyTarget) * 100, 100) : 0;
     return { categoryId: ac.categoryId, earnedCredits: earned, targetCredits: ac.weeklyTarget, completionPct };
   });
 
-  const fairnessScore =
-    scores.length > 0 ? scores.reduce((sum, s) => sum + s.completionPct, 0) / scores.length : 0;
+  const fairnessScore = scores.length > 0
+    ? scores.reduce((sum, s) => sum + s.completionPct, 0) / scores.length : 0;
 
   return { scores, fairnessScore };
 }
@@ -151,79 +147,210 @@ function computeCategoryScores(
 export const GameContext = createContext<GameContextType | undefined>(undefined);
 
 export function GameProvider({ children }: { children: ReactNode }) {
+  const auth = React.useContext(AuthContext);
   const [state, setState] = useState<GameState>(INITIAL_STATE);
   const [isLoading, setIsLoading] = useState(true);
+  const loadedForUser = useRef<string | null>(null);
 
+  const supabase = getSupabaseClient();
+
+  // Reload game data whenever auth user changes
   useEffect(() => {
-    loadState();
-  }, []);
+    const userId = auth?.session?.user?.id || null;
+    if (userId && userId !== loadedForUser.current) {
+      loadedForUser.current = userId;
+      loadGameData(userId);
+    } else if (!userId && loadedForUser.current) {
+      loadedForUser.current = null;
+      setState(INITIAL_STATE);
+      setIsLoading(false);
+    } else if (!userId) {
+      setIsLoading(false);
+    }
+  }, [auth?.session?.user?.id]);
 
-  const loadState = async () => {
+  const loadGameData = async (userId: string) => {
+    setIsLoading(true);
     try {
-      const saved = await AsyncStorage.getItem('levelup_game');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Check if we need to reset the week
-        const savedWeekStart = parsed.weekStartDate;
-        const currentWeekStart = getWeekStart();
-        if (savedWeekStart !== currentWeekStart) {
-          parsed.weeklyCompletions = [];
-          parsed.weekStartDate = currentWeekStart;
-          const { scores, fairnessScore } = computeCategoryScores(parsed.activeCategories || [], []);
-          parsed.weeklyCategoryScores = scores;
-          parsed.weeklyFairnessScore = fairnessScore;
-        }
-        setState(parsed);
+      const [
+        avatarRes,
+        categoriesRes,
+        questsRes,
+        metaRes,
+        streakRes,
+        badgesRes,
+      ] = await Promise.all([
+        supabase.from('user_avatars').select('*').eq('user_id', userId).maybeSingle(),
+        supabase.from('user_active_categories').select('*').eq('user_id', userId),
+        supabase.from('user_active_quests').select('*').eq('user_id', userId),
+        supabase.from('user_game_meta').select('*').eq('user_id', userId).maybeSingle(),
+        supabase.from('user_streaks').select('*').eq('user_id', userId).maybeSingle(),
+        supabase.from('user_badges').select('badge_id').eq('user_id', userId),
+      ]);
+
+      const currentWeekStart = getWeekStart();
+
+      // Load current week completions
+      const { data: completionsData } = await supabase
+        .from('quest_completions')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('completed_at', currentWeekStart + 'T00:00:00.000Z')
+        .order('completed_at', { ascending: false });
+
+      const avatar: AvatarConfig = avatarRes.data ? {
+        genderPresentation: avatarRes.data.gender_presentation,
+        skinTone: avatarRes.data.skin_tone,
+        hairstyle: avatarRes.data.hairstyle,
+        clothingStyle: avatarRes.data.clothing_style,
+        bodyType: avatarRes.data.body_type,
+        name: avatarRes.data.name,
+      } : DEFAULT_AVATAR;
+
+      const activeCategories: ActiveCategory[] = (categoriesRes.data || []).map((r: any) => ({
+        categoryId: r.category_id,
+        intensity: r.intensity,
+        weeklyTarget: parseFloat(r.weekly_target),
+      }));
+
+      const activeQuests: ActiveQuest[] = (questsRes.data || []).map((r: any) => ({
+        questId: r.quest_id,
+        categoryId: r.category_id,
+        name: r.name,
+        characterXp: r.character_xp,
+        weeklyCredits: parseFloat(r.weekly_credits),
+        difficulty: r.difficulty,
+      }));
+
+      const weeklyCompletions: QuestCompletion[] = (completionsData || []).map((r: any) => ({
+        questId: r.quest_id,
+        categoryId: r.category_id,
+        characterXp: r.character_xp,
+        weeklyCredits: parseFloat(r.weekly_credits),
+        completedAt: r.completed_at,
+      }));
+
+      const meta = metaRes.data;
+      const streakRow = streakRes.data;
+
+      // Check if streak needs resetting
+      const today = getTodayString();
+      let streakData: StreakData = {
+        dailyStreak: streakRow?.daily_streak || 0,
+        strongStreak: streakRow?.strong_streak || 0,
+        lastCompletedDate: streakRow?.last_completed_date || null,
+        categoriesCompletedToday: streakRow?.categories_completed_today || [],
+        streakSaversAvailable: streakRow?.streak_savers_available ?? 2,
+      };
+
+      // If today's date doesn't match last completed and it's a new day, reset today's cats
+      if (streakData.lastCompletedDate !== today) {
+        streakData = { ...streakData, categoriesCompletedToday: [] };
       }
+
+      // Check if streak is broken (more than 1 day gap without saver)
+      if (streakData.lastCompletedDate) {
+        const last = new Date(streakData.lastCompletedDate);
+        const now = new Date(today);
+        const diffDays = Math.floor((now.getTime() - last.getTime()) / 86400000);
+        if (diffDays > 1) {
+          streakData = { ...streakData, dailyStreak: 0, strongStreak: 0 };
+        }
+      }
+
+      const badges: string[] = (badgesRes.data || []).map((r: any) => r.badge_id);
+
+      const { scores, fairnessScore } = computeCategoryScores(activeCategories, weeklyCompletions);
+
+      setState({
+        avatar,
+        activeCategories,
+        activeQuests,
+        totalCharacterXp: meta?.total_character_xp || 0,
+        weeklyCompletions,
+        allTimeCompletions: meta?.all_time_completions || 0,
+        weeklyCategoryScores: scores,
+        weeklyFairnessScore: fairnessScore,
+        streak: streakData,
+        badges,
+        weekStartDate: currentWeekStart,
+        isPremium: meta?.is_premium || false,
+      });
     } catch (e) {
-      console.log('Game load error:', e);
+      console.error('loadGameData error:', e);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const saveState = async (newState: GameState) => {
-    try {
-      await AsyncStorage.setItem('levelup_game', JSON.stringify(newState));
-    } catch (e) {
-      console.log('Game save error:', e);
+  const getUserId = (): string | null => auth?.session?.user?.id || null;
+
+  const setAvatar = async (avatar: AvatarConfig) => {
+    const userId = getUserId();
+    setState((prev) => ({ ...prev, avatar }));
+    if (!userId) return;
+    await supabase.from('user_avatars').upsert({
+      user_id: userId,
+      gender_presentation: avatar.genderPresentation,
+      skin_tone: avatar.skinTone,
+      hairstyle: avatar.hairstyle,
+      clothing_style: avatar.clothingStyle,
+      body_type: avatar.bodyType,
+      name: avatar.name,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+  };
+
+  const setActiveCategories = async (categories: ActiveCategory[]) => {
+    const userId = getUserId();
+    const { scores, fairnessScore } = computeCategoryScores(categories, state.weeklyCompletions);
+    setState((prev) => ({
+      ...prev,
+      activeCategories: categories,
+      weeklyCategoryScores: scores,
+      weeklyFairnessScore: fairnessScore,
+    }));
+    if (!userId) return;
+    // Delete existing and re-insert
+    await supabase.from('user_active_categories').delete().eq('user_id', userId);
+    if (categories.length > 0) {
+      await supabase.from('user_active_categories').insert(
+        categories.map((c) => ({
+          user_id: userId,
+          category_id: c.categoryId,
+          intensity: c.intensity,
+          weekly_target: c.weeklyTarget,
+        }))
+      );
     }
   };
 
-  const updateState = useCallback((updater: (prev: GameState) => GameState) => {
-    setState((prev) => {
-      const next = updater(prev);
-      saveState(next);
-      return next;
-    });
-  }, []);
-
-  const setAvatar = (avatar: AvatarConfig) => {
-    updateState((prev) => ({ ...prev, avatar }));
+  const setActiveQuests = async (quests: ActiveQuest[]) => {
+    const userId = getUserId();
+    setState((prev) => ({ ...prev, activeQuests: quests }));
+    if (!userId) return;
+    await supabase.from('user_active_quests').delete().eq('user_id', userId);
+    if (quests.length > 0) {
+      await supabase.from('user_active_quests').insert(
+        quests.map((q) => ({
+          user_id: userId,
+          quest_id: q.questId,
+          category_id: q.categoryId,
+          name: q.name,
+          character_xp: q.characterXp,
+          weekly_credits: q.weeklyCredits,
+          difficulty: q.difficulty,
+        }))
+      );
+    }
   };
 
-  const setActiveCategories = (categories: ActiveCategory[]) => {
-    updateState((prev) => {
-      const { scores, fairnessScore } = computeCategoryScores(categories, prev.weeklyCompletions);
-      return { ...prev, activeCategories: categories, weeklyCategoryScores: scores, weeklyFairnessScore: fairnessScore };
-    });
-  };
-
-  const setActiveQuests = (quests: ActiveQuest[]) => {
-    updateState((prev) => ({ ...prev, activeQuests: quests }));
-  };
-
-  const completeQuest = (questId: string): QuestCompletion | null => {
-    const quest = QUEST_TEMPLATES.find((q) => q.id === questId) ||
-      state.activeQuests.find((q) => q.questId === questId);
-
-    if (!quest) return null;
-
-    const today = getTodayString();
+  const completeQuest = async (questId: string): Promise<QuestCompletion | null> => {
+    const userId = getUserId();
     const questTemplate = QUEST_TEMPLATES.find((q) => q.id === questId);
     if (!questTemplate) return null;
 
-    // Check daily limit
+    const today = getTodayString();
     const todayCompletions = state.weeklyCompletions.filter(
       (c) => c.questId === questId && c.completedAt.startsWith(today)
     );
@@ -237,7 +364,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
       completedAt: new Date().toISOString(),
     };
 
-    updateState((prev) => {
+    // Persist to DB
+    if (userId) {
+      await supabase.from('quest_completions').insert({
+        user_id: userId,
+        quest_id: completion.questId,
+        category_id: completion.categoryId,
+        character_xp: completion.characterXp,
+        weekly_credits: completion.weeklyCredits,
+        completed_at: completion.completedAt,
+      });
+    }
+
+    setState((prev) => {
       const newCompletions = [...prev.weeklyCompletions, completion];
       const { scores, fairnessScore } = computeCategoryScores(prev.activeCategories, newCompletions);
 
@@ -249,7 +388,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         const yesterdayStr = yesterday.toISOString().split('T')[0];
-
         if (lastDate === yesterdayStr) {
           streak.dailyStreak += 1;
         } else {
@@ -263,17 +401,45 @@ export function GameProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      if (streak.categoriesCompletedToday.length >= 2) {
-        if (streak.strongStreak < streak.dailyStreak) {
-          streak.strongStreak = streak.dailyStreak;
-        }
+      if (streak.categoriesCompletedToday.length >= 2 && streak.strongStreak < streak.dailyStreak) {
+        streak.strongStreak = streak.dailyStreak;
       }
 
-      // Check badges
-      const badges = [...prev.badges];
       const newXp = prev.totalCharacterXp + completion.characterXp;
-      if (newXp >= 100 && !badges.includes('first_100xp')) badges.push('first_100xp');
-      if (streak.dailyStreak >= 7 && !badges.includes('streak_7')) badges.push('streak_7');
+      const badges = [...prev.badges];
+      const newBadges: string[] = [];
+      if (newXp >= 100 && !badges.includes('first_100xp')) { badges.push('first_100xp'); newBadges.push('first_100xp'); }
+      if (streak.dailyStreak >= 7 && !badges.includes('streak_7')) { badges.push('streak_7'); newBadges.push('streak_7'); }
+      if (prev.allTimeCompletions + 1 >= 30 && !badges.includes('no_zero_days')) { badges.push('no_zero_days'); newBadges.push('no_zero_days'); }
+
+      // Persist streak + meta to DB (fire and forget)
+      if (userId) {
+        supabase.from('user_streaks').upsert({
+          user_id: userId,
+          daily_streak: streak.dailyStreak,
+          strong_streak: streak.strongStreak,
+          last_completed_date: streak.lastCompletedDate,
+          categories_completed_today: streak.categoriesCompletedToday,
+          streak_savers_available: streak.streakSaversAvailable,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+
+        supabase.from('user_game_meta').upsert({
+          user_id: userId,
+          total_character_xp: newXp,
+          all_time_completions: prev.allTimeCompletions + 1,
+          is_premium: prev.isPremium,
+          is_onboarded: true,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+
+        newBadges.forEach((bid) => {
+          supabase.from('user_badges').upsert(
+            { user_id: userId, badge_id: bid },
+            { onConflict: 'user_id,badge_id' }
+          );
+        });
+      }
 
       return {
         ...prev,
@@ -290,39 +456,46 @@ export function GameProvider({ children }: { children: ReactNode }) {
     return completion;
   };
 
-  const useStreakSaver = (): boolean => {
+  const useStreakSaver = async (): Promise<boolean> => {
+    const userId = getUserId();
     if (state.streak.streakSaversAvailable <= 0) return false;
-    updateState((prev) => {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-      return {
-        ...prev,
-        streak: {
-          ...prev.streak,
-          streakSaversAvailable: prev.streak.streakSaversAvailable - 1,
-          dailyStreak: prev.streak.dailyStreak + 1,
-          lastCompletedDate: yesterdayStr,
-        },
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    setState((prev) => {
+      const newStreak = {
+        ...prev.streak,
+        streakSaversAvailable: prev.streak.streakSaversAvailable - 1,
+        dailyStreak: prev.streak.dailyStreak + 1,
+        lastCompletedDate: yesterdayStr,
       };
+      if (userId) {
+        supabase.from('user_streaks').upsert({
+          user_id: userId,
+          daily_streak: newStreak.dailyStreak,
+          strong_streak: newStreak.strongStreak,
+          last_completed_date: newStreak.lastCompletedDate,
+          categories_completed_today: newStreak.categoriesCompletedToday,
+          streak_savers_available: newStreak.streakSaversAvailable,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+      }
+      return { ...prev, streak: newStreak };
     });
     return true;
   };
 
   const upgradeToPremium = () => {
-    updateState((prev) => ({ ...prev, isPremium: true }));
+    setState((prev) => ({ ...prev, isPremium: true }));
   };
 
   const resetWeek = () => {
-    updateState((prev) => {
+    const currentWeekStart = getWeekStart();
+    setState((prev) => {
       const { scores, fairnessScore } = computeCategoryScores(prev.activeCategories, []);
-      return {
-        ...prev,
-        weeklyCompletions: [],
-        weeklyCategoryScores: scores,
-        weeklyFairnessScore: fairnessScore,
-        weekStartDate: getWeekStart(),
-      };
+      return { ...prev, weeklyCompletions: [], weeklyCategoryScores: scores, weeklyFairnessScore: fairnessScore, weekStartDate: currentWeekStart };
     });
   };
 

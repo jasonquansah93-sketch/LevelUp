@@ -1,5 +1,6 @@
 import React, { createContext, useState, ReactNode, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getSupabaseClient } from '@/template';
+import type { Session, User } from '@supabase/supabase-js';
 
 export interface UserProfile {
   id: string;
@@ -11,83 +12,178 @@ export interface UserProfile {
 
 interface AuthContextType {
   user: UserProfile | null;
+  session: Session | null;
   isLoading: boolean;
   isOnboarded: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, name: string) => Promise<void>;
+  sendOTP: (email: string) => Promise<void>;
+  verifyOTP: (email: string, token: string) => Promise<void>;
   logout: () => Promise<void>;
   completeOnboarding: () => Promise<void>;
-  upgradeToPremium: () => void;
+  upgradeToPremium: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const MOCK_USER: UserProfile = {
-  id: 'user_001',
-  email: 'alex@example.com',
-  displayName: 'Alex',
-  isPremium: false,
-  createdAt: new Date().toISOString(),
-};
+function mapUser(supabaseUser: User, meta?: { displayName?: string; isPremium?: boolean }): UserProfile {
+  return {
+    id: supabaseUser.id,
+    email: supabaseUser.email || '',
+    displayName:
+      meta?.displayName ||
+      supabaseUser.user_metadata?.full_name ||
+      supabaseUser.user_metadata?.name ||
+      supabaseUser.email?.split('@')[0] ||
+      'User',
+    isPremium: meta?.isPremium || false,
+    createdAt: supabaseUser.created_at,
+  };
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isOnboarded, setIsOnboarded] = useState(false);
 
+  const supabase = getSupabaseClient();
+
   useEffect(() => {
-    loadPersistedAuth();
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      setSession(s);
+      if (s?.user) {
+        loadUserProfile(s.user);
+      } else {
+        setIsLoading(false);
+      }
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+      if (s?.user) {
+        loadUserProfile(s.user);
+      } else {
+        setUser(null);
+        setIsOnboarded(false);
+        setIsLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const loadPersistedAuth = async () => {
+  const loadUserProfile = async (supabaseUser: User) => {
     try {
-      const [savedUser, onboarded] = await Promise.all([
-        AsyncStorage.getItem('levelup_user'),
-        AsyncStorage.getItem('levelup_onboarded'),
-      ]);
-      if (savedUser) setUser(JSON.parse(savedUser));
-      if (onboarded === 'true') setIsOnboarded(true);
+      // Ensure user_profiles row exists (trigger may not have fired yet)
+      await ensureUserProfile(supabaseUser);
+
+      // Load game meta for onboarded status and premium
+      const { data: meta } = await supabase
+        .from('user_game_meta')
+        .select('is_onboarded, is_premium')
+        .eq('user_id', supabaseUser.id)
+        .maybeSingle();
+
+      setUser(mapUser(supabaseUser, {
+        displayName:
+          supabaseUser.user_metadata?.full_name ||
+          supabaseUser.user_metadata?.name ||
+          supabaseUser.email?.split('@')[0],
+        isPremium: meta?.is_premium || false,
+      }));
+      setIsOnboarded(meta?.is_onboarded || false);
     } catch (e) {
-      console.log('Auth load error:', e);
+      console.error('loadUserProfile error:', e);
+      setUser(mapUser(supabaseUser));
     } finally {
       setIsLoading(false);
     }
   };
 
-  const login = async (email: string, _password: string) => {
-    await new Promise((r) => setTimeout(r, 900));
-    const u = { ...MOCK_USER, email, displayName: email.split('@')[0] };
-    setUser(u);
-    await AsyncStorage.setItem('levelup_user', JSON.stringify(u));
+  const ensureUserProfile = async (supabaseUser: User) => {
+    const { data } = await supabase
+      .from('user_profiles')
+      .select('id')
+      .eq('id', supabaseUser.id)
+      .maybeSingle();
+
+    if (!data) {
+      await supabase.from('user_profiles').upsert({
+        id: supabaseUser.id,
+        email: supabaseUser.email || '',
+        username:
+          supabaseUser.user_metadata?.full_name ||
+          supabaseUser.user_metadata?.name ||
+          supabaseUser.email?.split('@')[0] ||
+          'user',
+      });
+    }
   };
 
-  const signup = async (email: string, _password: string, name: string) => {
-    await new Promise((r) => setTimeout(r, 900));
-    const u = { ...MOCK_USER, email, displayName: name, createdAt: new Date().toISOString() };
-    setUser(u);
-    await AsyncStorage.setItem('levelup_user', JSON.stringify(u));
+  const login = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
+  };
+
+  const signup = async (email: string, password: string, name: string) => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: name } },
+    });
+    if (error) throw new Error(error.message);
+  };
+
+  const sendOTP = async (email: string) => {
+    const { error } = await supabase.auth.signInWithOtp({ email });
+    if (error) throw new Error(error.message);
+  };
+
+  const verifyOTP = async (email: string, token: string) => {
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
+    if (error) throw new Error(error.message);
   };
 
   const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
+    setSession(null);
     setIsOnboarded(false);
-    await AsyncStorage.multiRemove(['levelup_user', 'levelup_onboarded', 'levelup_game']);
   };
 
   const completeOnboarding = async () => {
+    if (!session?.user) return;
+    await supabase.from('user_game_meta').upsert(
+      { user_id: session.user.id, is_onboarded: true },
+      { onConflict: 'user_id' }
+    );
     setIsOnboarded(true);
-    await AsyncStorage.setItem('levelup_onboarded', 'true');
   };
 
-  const upgradeToPremium = () => {
-    if (!user) return;
-    const u = { ...user, isPremium: true };
-    setUser(u);
-    AsyncStorage.setItem('levelup_user', JSON.stringify(u));
+  const upgradeToPremium = async () => {
+    if (!session?.user || !user) return;
+    await supabase.from('user_game_meta').upsert(
+      { user_id: session.user.id, is_premium: true },
+      { onConflict: 'user_id' }
+    );
+    setUser({ ...user, isPremium: true });
+  };
+
+  const refreshUser = async () => {
+    const { data: { user: u } } = await supabase.auth.getUser();
+    if (u) await loadUserProfile(u);
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, isOnboarded, login, signup, logout, completeOnboarding, upgradeToPremium }}>
+    <AuthContext.Provider value={{
+      user, session, isLoading, isOnboarded,
+      login, signup, sendOTP, verifyOTP,
+      logout, completeOnboarding, upgradeToPremium, refreshUser,
+    }}>
       {children}
     </AuthContext.Provider>
   );

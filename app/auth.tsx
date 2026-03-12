@@ -9,54 +9,104 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 
-type Mode = 'login' | 'signup' | 'email';
+type Screen = 'main' | 'email-signup' | 'email-login' | 'otp-sent';
 
 export default function AuthScreen() {
-  const [mode, setMode] = useState<Mode>('login');
-  const [emailMode, setEmailMode] = useState<'login' | 'signup'>('signup');
+  const [screen, setScreen] = useState<Screen>('main');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [otpCode, setOtpCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingProvider, setLoadingProvider] = useState<'apple' | 'google' | null>(null);
   const [error, setError] = useState('');
   const [showPass, setShowPass] = useState(false);
 
-  const { login, signup } = useAuth();
+  const { login, signup, sendOTP, verifyOTP } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  const clearError = () => setError('');
+
+  // Apple / Google — social auth is scaffolded; shows info since OAuth requires additional setup
   const handleSocialAuth = async (provider: 'apple' | 'google') => {
-    setError('');
+    clearError();
     setLoadingProvider(provider);
     try {
-      await new Promise((r) => setTimeout(r, 1200));
-      const mockEmail = provider === 'apple' ? 'user@icloud.com' : 'user@gmail.com';
-      const mockName = provider === 'apple' ? 'Apple User' : 'Google User';
-      await signup(mockEmail, 'password', mockName);
-      router.replace('/onboarding/intro');
-    } catch (e: any) {
-      setError('Could not sign in. Please try again.');
+      // Social OAuth requires Google to be enabled in OnSpace Cloud dashboard.
+      // Scaffold: treat as email+password with a placeholder social account.
+      await new Promise((r) => setTimeout(r, 800));
+      setError(
+        provider === 'apple'
+          ? 'Apple Sign-In requires additional configuration. Use Email to continue.'
+          : 'Google Sign-In requires Google OAuth to be enabled in OnSpace Cloud. Use Email to continue.'
+      );
     } finally {
       setLoadingProvider(null);
     }
   };
 
-  const handleEmailSubmit = async () => {
-    setError('');
-    if (!email.trim() || !password.trim()) { setError('Please fill in all fields.'); return; }
-    if (emailMode === 'signup' && !name.trim()) { setError('Please enter your name.'); return; }
+  const handleEmailSignup = async () => {
+    clearError();
+    if (!name.trim()) { setError('Please enter your name.'); return; }
+    if (!email.trim()) { setError('Please enter your email.'); return; }
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
     setLoading(true);
     try {
-      if (emailMode === 'login') {
-        await login(email.trim(), password);
-      } else {
-        await signup(email.trim(), password, name.trim());
-      }
-      router.replace('/onboarding/intro');
+      await signup(email.trim().toLowerCase(), password, name.trim());
+      // Auth state change will redirect via app/index.tsx
     } catch (e: any) {
       setError(e.message || 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmailLogin = async () => {
+    clearError();
+    if (!email.trim()) { setError('Please enter your email.'); return; }
+    if (!password.trim()) { setError('Please enter your password.'); return; }
+    setLoading(true);
+    try {
+      await login(email.trim().toLowerCase(), password);
+      // Auth state change will redirect via app/index.tsx
+    } catch (e: any) {
+      const msg = e.message || '';
+      if (msg.toLowerCase().includes('invalid login')) {
+        setError('Incorrect email or password.');
+      } else if (msg.toLowerCase().includes('email not confirmed')) {
+        setError('Please verify your email before signing in.');
+      } else {
+        setError(msg || 'Sign-in failed. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendOTP = async () => {
+    clearError();
+    if (!email.trim()) { setError('Please enter your email.'); return; }
+    setLoading(true);
+    try {
+      await sendOTP(email.trim().toLowerCase());
+      setScreen('otp-sent');
+    } catch (e: any) {
+      setError(e.message || 'Could not send code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    clearError();
+    if (otpCode.length < 4) { setError('Please enter the verification code.'); return; }
+    setLoading(true);
+    try {
+      await verifyOTP(email.trim().toLowerCase(), otpCode.trim());
+      // Redirect happens automatically via auth state change
+    } catch (e: any) {
+      setError(e.message || 'Invalid code. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -75,31 +125,46 @@ export default function AuthScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
+        <Pressable
+          onPress={() => {
+            if (screen === 'main') router.back();
+            else if (screen === 'otp-sent') setScreen('main');
+            else setScreen('main');
+            clearError();
+          }}
+          style={styles.backBtn}
+          hitSlop={12}
+        >
           <MaterialIcons name="arrow-back" size={24} color={Colors.textSecondary} />
         </Pressable>
 
+        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>
-            {mode === 'email'
-              ? (emailMode === 'signup' ? 'Create Account' : 'Welcome Back')
-              : 'Get Started'}
+            {screen === 'main' && 'Get Started'}
+            {screen === 'email-signup' && 'Create Account'}
+            {screen === 'email-login' && 'Welcome Back'}
+            {screen === 'otp-sent' && 'Check Your Email'}
           </Text>
           <Text style={styles.subtitle}>
-            {mode === 'email'
-              ? (emailMode === 'signup' ? 'Start building your strongest self.' : 'Pick up where you left off.')
-              : 'Choose how you want to continue.'}
+            {screen === 'main' && 'Choose how you want to continue.'}
+            {screen === 'email-signup' && 'Start building your strongest self.'}
+            {screen === 'email-login' && 'Pick up where you left off.'}
+            {screen === 'otp-sent' && `We sent a ${4}-digit code to ${email}.`}
           </Text>
         </View>
 
-        <View style={styles.mockBanner}>
-          <MaterialIcons name="info-outline" size={14} color={Colors.gold} />
-          <Text style={styles.mockText}>Mock login — tap any option to continue</Text>
-        </View>
+        {/* Error banner */}
+        {error ? (
+          <View style={styles.errorBox}>
+            <MaterialIcons name="error-outline" size={14} color={Colors.error} />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
 
-        {mode !== 'email' ? (
+        {/* MAIN screen */}
+        {screen === 'main' && (
           <>
-            {/* Apple Sign In */}
             <Pressable
               style={({ pressed }) => [styles.socialBtn, styles.appleBtn, pressed && styles.pressed]}
               onPress={() => handleSocialAuth('apple')}
@@ -115,7 +180,6 @@ export default function AuthScreen() {
               )}
             </Pressable>
 
-            {/* Google Sign In */}
             <Pressable
               style={({ pressed }) => [styles.socialBtn, styles.googleBtn, pressed && styles.pressed]}
               onPress={() => handleSocialAuth('google')}
@@ -141,7 +205,7 @@ export default function AuthScreen() {
 
             <Pressable
               style={({ pressed }) => [styles.emailBtn, pressed && styles.pressed]}
-              onPress={() => setMode('email')}
+              onPress={() => { clearError(); setScreen('email-signup'); }}
             >
               <MaterialIcons name="email" size={20} color={Colors.textSecondary} />
               <Text style={styles.emailBtnText}>Continue with Email</Text>
@@ -149,113 +213,231 @@ export default function AuthScreen() {
 
             <View style={styles.switchRow}>
               <Text style={styles.switchLabel}>Already have an account?</Text>
-              <Pressable onPress={() => { setMode('email'); setEmailMode('login'); }} hitSlop={8}>
-                <Text style={styles.switchBtn}>Sign In</Text>
+              <Pressable onPress={() => { clearError(); setScreen('email-login'); }} hitSlop={8}>
+                <Text style={styles.switchLink}>Sign In</Text>
               </Pressable>
             </View>
           </>
-        ) : (
+        )}
+
+        {/* EMAIL SIGNUP */}
+        {screen === 'email-signup' && (
           <>
-            {/* Email Form */}
             <View style={styles.form}>
-              {emailMode === 'signup' && (
-                <View style={styles.field}>
-                  <Text style={styles.label}>Your Name</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={name}
-                    onChangeText={setName}
-                    placeholder="Alex"
-                    placeholderTextColor={Colors.textMuted}
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                  />
-                </View>
-              )}
-              <View style={styles.field}>
-                <Text style={styles.label}>Email</Text>
+              <Field label="Your Name">
+                <TextInput
+                  style={styles.input}
+                  value={name}
+                  onChangeText={(v) => { clearError(); setName(v); }}
+                  placeholder="Alex"
+                  placeholderTextColor={Colors.textMuted}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                />
+              </Field>
+              <Field label="Email">
                 <TextInput
                   style={styles.input}
                   value={email}
-                  onChangeText={setEmail}
+                  onChangeText={(v) => { clearError(); setEmail(v); }}
                   placeholder="alex@example.com"
                   placeholderTextColor={Colors.textMuted}
                   autoCapitalize="none"
                   keyboardType="email-address"
                   returnKeyType="next"
                 />
-              </View>
-              <View style={styles.field}>
-                <Text style={styles.label}>Password</Text>
+              </Field>
+              <Field label="Password">
                 <View style={styles.passwordWrap}>
                   <TextInput
                     style={[styles.input, styles.passwordInput]}
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={(v) => { clearError(); setPassword(v); }}
                     placeholder="6+ characters"
                     placeholderTextColor={Colors.textMuted}
                     secureTextEntry={!showPass}
                     returnKeyType="done"
-                    onSubmitEditing={handleEmailSubmit}
+                    onSubmitEditing={handleEmailSignup}
                   />
                   <Pressable style={styles.eyeBtn} onPress={() => setShowPass(!showPass)} hitSlop={8}>
                     <MaterialIcons name={showPass ? 'visibility-off' : 'visibility'} size={20} color={Colors.textSecondary} />
                   </Pressable>
                 </View>
-              </View>
-
-              {error ? (
-                <View style={styles.errorBox}>
-                  <MaterialIcons name="error-outline" size={14} color={Colors.error} />
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
-              ) : null}
-
-              <Pressable
-                style={({ pressed }) => [styles.submitBtn, pressed && styles.pressed, loading && styles.disabled]}
-                onPress={handleEmailSubmit}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color={Colors.textInverse} size="small" />
-                ) : (
-                  <Text style={styles.submitText}>{emailMode === 'signup' ? 'Create Account' : 'Sign In'}</Text>
-                )}
-              </Pressable>
+              </Field>
             </View>
+
+            <Pressable
+              style={({ pressed }) => [styles.submitBtn, pressed && styles.pressed, loading && styles.disabled]}
+              onPress={handleEmailSignup}
+              disabled={loading}
+            >
+              {loading ? <ActivityIndicator color={Colors.textInverse} size="small" /> : <Text style={styles.submitText}>Create Account</Text>}
+            </Pressable>
 
             <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>
-                {emailMode === 'signup' ? 'Already have an account?' : 'New here?'}
-              </Text>
-              <Pressable onPress={() => setEmailMode(emailMode === 'signup' ? 'login' : 'signup')} hitSlop={8}>
-                <Text style={styles.switchBtn}>{emailMode === 'signup' ? 'Sign In' : 'Create Account'}</Text>
+              <Text style={styles.switchLabel}>Already have an account?</Text>
+              <Pressable onPress={() => { clearError(); setScreen('email-login'); }} hitSlop={8}>
+                <Text style={styles.switchLink}>Sign In</Text>
               </Pressable>
             </View>
 
-            <Pressable onPress={() => setMode('login')} style={styles.backToOptions} hitSlop={8}>
-              <MaterialIcons name="arrow-back" size={14} color={Colors.textMuted} />
-              <Text style={styles.backToOptionsText}>Other sign-in options</Text>
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or sign in without password</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <Pressable style={({ pressed }) => [styles.otpBtn, pressed && styles.pressed]} onPress={() => { clearError(); setScreen('otp-sent'); handleSendOTP(); }}>
+              <MaterialIcons name="mark-email-read" size={18} color={Colors.gold} />
+              <Text style={styles.otpBtnText}>Send Magic Code</Text>
             </Pressable>
           </>
         )}
+
+        {/* EMAIL LOGIN */}
+        {screen === 'email-login' && (
+          <>
+            <View style={styles.form}>
+              <Field label="Email">
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={(v) => { clearError(); setEmail(v); }}
+                  placeholder="alex@example.com"
+                  placeholderTextColor={Colors.textMuted}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  returnKeyType="next"
+                />
+              </Field>
+              <Field label="Password">
+                <View style={styles.passwordWrap}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    value={password}
+                    onChangeText={(v) => { clearError(); setPassword(v); }}
+                    placeholder="Your password"
+                    placeholderTextColor={Colors.textMuted}
+                    secureTextEntry={!showPass}
+                    returnKeyType="done"
+                    onSubmitEditing={handleEmailLogin}
+                  />
+                  <Pressable style={styles.eyeBtn} onPress={() => setShowPass(!showPass)} hitSlop={8}>
+                    <MaterialIcons name={showPass ? 'visibility-off' : 'visibility'} size={20} color={Colors.textSecondary} />
+                  </Pressable>
+                </View>
+              </Field>
+            </View>
+
+            <Pressable
+              style={({ pressed }) => [styles.submitBtn, pressed && styles.pressed, loading && styles.disabled]}
+              onPress={handleEmailLogin}
+              disabled={loading}
+            >
+              {loading ? <ActivityIndicator color={Colors.textInverse} size="small" /> : <Text style={styles.submitText}>Sign In</Text>}
+            </Pressable>
+
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel}>New here?</Text>
+              <Pressable onPress={() => { clearError(); setScreen('email-signup'); }} hitSlop={8}>
+                <Text style={styles.switchLink}>Create Account</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <Pressable
+              style={({ pressed }) => [styles.otpBtn, pressed && styles.pressed]}
+              onPress={() => { clearError(); handleSendOTP(); }}
+              disabled={loading}
+            >
+              <MaterialIcons name="mark-email-read" size={18} color={Colors.gold} />
+              <Text style={styles.otpBtnText}>Sign in with Magic Code</Text>
+            </Pressable>
+          </>
+        )}
+
+        {/* OTP SENT */}
+        {screen === 'otp-sent' && (
+          <>
+            <View style={styles.otpIconWrap}>
+              <MaterialIcons name="mark-email-read" size={48} color={Colors.gold} />
+            </View>
+
+            <View style={styles.form}>
+              <Field label={`Enter ${4}-Digit Code`}>
+                <TextInput
+                  style={[styles.input, styles.otpInput]}
+                  value={otpCode}
+                  onChangeText={(v) => { clearError(); setOtpCode(v.replace(/\D/g, '').slice(0, 4)); }}
+                  placeholder="0000"
+                  placeholderTextColor={Colors.textMuted}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                  returnKeyType="done"
+                  onSubmitEditing={handleVerifyOTP}
+                  autoFocus
+                />
+              </Field>
+            </View>
+
+            <Pressable
+              style={({ pressed }) => [styles.submitBtn, pressed && styles.pressed, (loading || otpCode.length < 4) && styles.disabled]}
+              onPress={handleVerifyOTP}
+              disabled={loading || otpCode.length < 4}
+            >
+              {loading ? <ActivityIndicator color={Colors.textInverse} size="small" /> : <Text style={styles.submitText}>Verify & Continue</Text>}
+            </Pressable>
+
+            <Pressable style={styles.resendBtn} onPress={handleSendOTP} disabled={loading} hitSlop={8}>
+              <Text style={styles.resendBtnText}>Resend code</Text>
+            </Pressable>
+          </>
+        )}
+
+        <View style={styles.termsRow}>
+          <Text style={styles.termsText}>
+            By continuing you agree to our{' '}
+            <Text style={styles.termsLink}>Terms of Service</Text>
+            {' and '}
+            <Text style={styles.termsLink}>Privacy Policy</Text>.
+          </Text>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      {children}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   scroll: { flexGrow: 1, padding: Spacing.xl },
-  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.lg, marginLeft: -Spacing.sm },
-  header: { marginBottom: Spacing.lg },
+  backBtn: {
+    width: 44, height: 44, alignItems: 'center', justifyContent: 'center',
+    marginBottom: Spacing.lg, marginLeft: -Spacing.sm,
+  },
+  header: { marginBottom: Spacing.xl },
   title: { fontSize: FontSize.xxxl, fontWeight: FontWeight.heavy, color: Colors.textPrimary, marginBottom: Spacing.xs },
   subtitle: { fontSize: FontSize.md, color: Colors.textSecondary, lineHeight: 22 },
-  mockBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: Colors.goldSoft, borderRadius: Radius.sm, padding: Spacing.sm,
-    marginBottom: Spacing.lg, borderWidth: 1, borderColor: Colors.gold + '30',
+
+  errorBox: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: Colors.errorSoft, borderRadius: Radius.sm, padding: Spacing.md,
+    marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.error + '40',
   },
-  mockText: { fontSize: FontSize.xs, color: Colors.gold, flex: 1 },
+  errorText: { fontSize: FontSize.sm, color: Colors.error, flex: 1, lineHeight: 20 },
+
   socialBtn: {
     height: 56, borderRadius: Radius.md, flexDirection: 'row',
     alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: Spacing.sm,
@@ -268,18 +450,34 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   googleIconText: { fontSize: 13, fontWeight: FontWeight.bold, color: '#4285F4' },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginVertical: Spacing.sm },
+
+  dividerRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    marginVertical: Spacing.md,
+  },
   dividerLine: { flex: 1, height: 1, backgroundColor: Colors.surfaceBorder },
-  dividerText: { fontSize: FontSize.sm, color: Colors.textMuted },
+  dividerText: { fontSize: FontSize.xs, color: Colors.textMuted },
+
   emailBtn: {
     height: 52, borderRadius: Radius.md, flexDirection: 'row',
     alignItems: 'center', justifyContent: 'center', gap: 10,
     borderWidth: 1, borderColor: Colors.surfaceBorder, backgroundColor: Colors.surface,
   },
   emailBtnText: { fontSize: FontSize.md, fontWeight: FontWeight.medium, color: Colors.textSecondary },
-  form: { gap: Spacing.md, marginBottom: Spacing.xl },
+
+  switchRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, marginTop: Spacing.md,
+  },
+  switchLabel: { fontSize: FontSize.sm, color: Colors.textSecondary },
+  switchLink: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.gold },
+
+  form: { gap: Spacing.md, marginBottom: Spacing.lg },
   field: { gap: Spacing.xs },
-  label: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textSecondary, marginLeft: 2 },
+  fieldLabel: {
+    fontSize: FontSize.sm, fontWeight: FontWeight.semibold,
+    color: Colors.textSecondary, marginLeft: 2,
+  },
   input: {
     backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1,
     borderColor: Colors.surfaceBorder, height: 52, paddingHorizontal: Spacing.md,
@@ -288,22 +486,32 @@ const styles = StyleSheet.create({
   passwordWrap: { position: 'relative' },
   passwordInput: { paddingRight: 52 },
   eyeBtn: { position: 'absolute', right: 14, top: 0, bottom: 0, justifyContent: 'center' },
-  errorBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: Colors.errorSoft, borderRadius: Radius.sm, padding: Spacing.sm,
-    borderWidth: 1, borderColor: Colors.error + '40',
-  },
-  errorText: { fontSize: FontSize.sm, color: Colors.error, flex: 1 },
+
   submitBtn: {
     backgroundColor: Colors.gold, height: 56, borderRadius: Radius.md,
-    alignItems: 'center', justifyContent: 'center', marginTop: Spacing.xs,
+    alignItems: 'center', justifyContent: 'center',
   },
   submitText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textInverse },
-  disabled: { opacity: 0.6 },
-  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: Spacing.md },
-  switchLabel: { fontSize: FontSize.sm, color: Colors.textSecondary },
-  switchBtn: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.gold },
-  backToOptions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: Spacing.md },
-  backToOptionsText: { fontSize: FontSize.sm, color: Colors.textMuted },
+  disabled: { opacity: 0.55 },
+
+  otpBtn: {
+    height: 50, borderRadius: Radius.md, flexDirection: 'row',
+    alignItems: 'center', justifyContent: 'center', gap: 10,
+    borderWidth: 1.5, borderColor: Colors.gold + '50', backgroundColor: Colors.goldSoft,
+  },
+  otpBtnText: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.gold },
+
+  otpIconWrap: { alignItems: 'center', paddingVertical: Spacing.xl },
+  otpInput: {
+    textAlign: 'center', fontSize: 28, fontWeight: FontWeight.bold,
+    letterSpacing: 12, height: 64,
+  },
+  resendBtn: { alignItems: 'center', marginTop: Spacing.md },
+  resendBtnText: { fontSize: FontSize.sm, color: Colors.textMuted, fontWeight: FontWeight.medium },
+
+  termsRow: { marginTop: Spacing.xl },
+  termsText: { fontSize: FontSize.xs, color: Colors.textMuted, textAlign: 'center', lineHeight: 18 },
+  termsLink: { color: Colors.textSecondary, fontWeight: FontWeight.medium },
+
   pressed: { opacity: 0.85, transform: [{ scale: 0.985 }] },
 });

@@ -26,8 +26,8 @@ export default function HomeScreen() {
   const todayByQuestId: Record<string, number> = {};
   todayCompletions.forEach((c) => { todayByQuestId[c.questId] = (todayByQuestId[c.questId] || 0) + 1; });
 
-  const handleComplete = (questId: string) => {
-    const completion = completeQuest(questId);
+  const handleComplete = async (questId: string) => {
+    const completion = await completeQuest(questId);
     if (!completion) return;
     const template = QUEST_TEMPLATES.find((q) => q.id === questId);
     const cat = getCategoryById(template?.categoryId || '');
@@ -101,7 +101,7 @@ export default function HomeScreen() {
             </Text>
             <FeaturedQuestCard
               quest={featuredQuest}
-              onComplete={() => handleComplete(featuredQuest.questId)}
+              onComplete={() => void handleComplete(featuredQuest.questId)}
             />
           </View>
         ) : totalQuests === 0 ? (
@@ -132,7 +132,7 @@ export default function HomeScreen() {
                 <Pressable
                   key={quest.questId}
                   style={({ pressed }) => [styles.questRow, { borderLeftColor: catColor }, pressed && styles.pressed]}
-                  onPress={() => handleComplete(quest.questId)}
+                  onPress={() => void handleComplete(quest.questId)}
                 >
                   <View style={styles.questInfo}>
                     <Text style={styles.questName}>{quest.name}</Text>
@@ -167,7 +167,7 @@ export default function HomeScreen() {
                     styles.questRow, { borderLeftColor: catColor },
                     styles.questRowDone, pressed && styles.pressed,
                   ]}
-                  onPress={() => handleComplete(quest.questId)}
+                  onPress={() => void handleComplete(quest.questId)}
                 >
                   <View style={styles.questInfo}>
                     <Text style={[styles.questName, styles.questNameDone]}>{quest.name}</Text>
