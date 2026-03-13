@@ -652,7 +652,7 @@ const styles = StyleSheet.create({
 
   // Generation overlay
   genOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.9)',
+    flex: 1, backgroundColor: 'rgba(237,232,223,0.92)',
     alignItems: 'center', justifyContent: 'center', padding: Spacing.xl,
   },
   genCard: {

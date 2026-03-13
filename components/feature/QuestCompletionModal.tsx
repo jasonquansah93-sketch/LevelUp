@@ -98,20 +98,20 @@ export function QuestCompletionModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(42,26,10,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: Spacing.xl,
   },
   card: {
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.xl,
     padding: Spacing.xl,
     width: '100%',
     maxWidth: 380,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.success + '40',
+    borderColor: Colors.success + '50',
     ...Shadows.md,
   },
   iconRing: {

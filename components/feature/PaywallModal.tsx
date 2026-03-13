@@ -82,17 +82,17 @@ export function PaywallModal({ visible, trigger, onClose, onUpgrade }: PaywallMo
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(42,26,10,0.45)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: Colors.surface,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     padding: Spacing.xl,
     paddingBottom: 36,
     borderTopWidth: 1,
-    borderTopColor: Colors.gold + '30',
+    borderTopColor: Colors.gold + '40',
     ...Shadows.md,
   },
   handle: {

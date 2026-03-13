@@ -11,8 +11,8 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <AuthProvider>
           <GameProvider>
-            <StatusBar style="light" />
-            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#0F0F13' } }}>
+            <StatusBar style="dark" />
+            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#EDE8DF' } }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="welcome" />
               <Stack.Screen name="auth" />

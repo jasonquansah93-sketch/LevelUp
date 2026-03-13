@@ -70,12 +70,12 @@ const styles = StyleSheet.create({
   hero: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   overlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(15,15,19,0.45)',
+    backgroundColor: 'rgba(237,232,223,0.30)',
   },
   bottom: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     padding: Spacing.xl, paddingTop: Spacing.xxl,
-    backgroundColor: 'rgba(15,15,19,0.95)',
+    backgroundColor: 'rgba(250,247,241,0.97)',
     borderTopLeftRadius: 28, borderTopRightRadius: 28,
     gap: Spacing.sm,
   },
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xxxl, fontWeight: FontWeight.heavy,
     color: Colors.textPrimary, lineHeight: 40,
   },
-  subtitle: { fontSize: FontSize.md, color: Colors.textSecondary, lineHeight: 24, marginBottom: Spacing.xs },
+  subtitle: { fontSize: FontSize.md, color: Colors.textSecondary, lineHeight: 24, marginBottom: Spacing.xs, includeFontPadding: false },
   valueProps: { flexDirection: 'row', gap: Spacing.md, flexWrap: 'wrap', marginBottom: Spacing.sm },
   valueProp: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   valuePropIcon: {

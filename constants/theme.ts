@@ -1,50 +1,50 @@
 // LevelUp - Design System
-// Premium dark-first design tokens
+// Warm premium light theme — cream base, amber/gold accents, dark brown typography
 
 export const Colors = {
-  // Base surfaces
-  bg: '#0F0F13',
-  surface: '#1A1A22',
-  surfaceElevated: '#22222E',
-  surfaceBorder: '#2A2A38',
-  surfaceHover: '#2E2E3E',
+  // ── Base Surfaces ──────────────────────────────────────────────────────────
+  bg: '#EDE8DF',               // Warm cream — main app background
+  surface: '#FAF7F1',          // Off-white warm card surface
+  surfaceElevated: '#F5F0E8',  // Slightly deeper elevated card
+  surfaceBorder: '#DDD6CB',    // Subtle warm border
+  surfaceHover: '#F0EBE0',     // Pressed/hover state for rows
 
-  // Brand
-  gold: '#F5C842',
-  goldDim: '#C9A22A',
-  goldSoft: 'rgba(245, 200, 66, 0.12)',
-  goldGlow: 'rgba(245, 200, 66, 0.25)',
-  amber: '#F5A623',
+  // ── Brand Accent ───────────────────────────────────────────────────────────
+  gold: '#C07A1A',             // Warm deep amber — primary brand color
+  goldDim: '#A36515',          // Dimmed gold for pressed states
+  goldSoft: '#F5E8CC',         // Very light amber tint — backgrounds
+  goldGlow: 'rgba(192, 122, 26, 0.18)',
+  amber: '#D4620E',            // Deeper orange-amber — streak fire icon
 
-  // Semantic
-  success: '#3DD68C',
-  successSoft: 'rgba(61, 214, 140, 0.12)',
-  error: '#FF5757',
-  errorSoft: 'rgba(255, 87, 87, 0.12)',
-  warning: '#FFB347',
-  warningSoft: 'rgba(255, 179, 71, 0.12)',
-  info: '#5E9BFF',
-  infoSoft: 'rgba(94, 155, 255, 0.12)',
+  // ── Semantic Colors ────────────────────────────────────────────────────────
+  success: '#2A7A4E',
+  successSoft: '#E2F1E9',
+  error: '#B83030',
+  errorSoft: '#FAE9E9',
+  warning: '#C07A1A',
+  warningSoft: '#F5E8CC',
+  info: '#2A5A9C',
+  infoSoft: '#E4ECF8',
 
-  // Text
-  textPrimary: '#F0F0F5',
-  textSecondary: '#8888A0',
-  textMuted: '#55556A',
-  textInverse: '#0F0F13',
+  // ── Typography ─────────────────────────────────────────────────────────────
+  textPrimary: '#2A1A0A',      // Very dark warm brown
+  textSecondary: '#7A6550',    // Medium warm brown
+  textMuted: '#B0978A',        // Light warm taupe
+  textInverse: '#FFFFFF',      // White — for text on dark/gold fills
 
-  // Categories
-  fitness: '#FF6B35',
-  health: '#3DD68C',
-  sleep: '#7B68EE',
-  learning: '#5E9BFF',
-  reading: '#A78BFA',
-  focus: '#F5C842',
-  discipline: '#FF5757',
-  order: '#4ECDC4',
-  career: '#F5A623',
-  communication: '#FF8FAB',
-  finance: '#98D4A3',
-  social: '#FFA07A',
+  // ── Category Colors (kept vibrant but slightly toned for light bg) ─────────
+  fitness: '#D45A20',
+  health: '#2A8A5C',
+  sleep: '#6A5ACC',
+  learning: '#2A6ACC',
+  reading: '#8A5ACC',
+  focus: '#C07A1A',
+  discipline: '#C03A2A',
+  order: '#2A9A96',
+  career: '#C07A00',
+  communication: '#C04A7A',
+  finance: '#4A8A5A',
+  social: '#D46A3A',
 };
 
 export const Spacing = {
@@ -86,25 +86,25 @@ export const FontWeight = {
 
 export const Shadows = {
   sm: {
-    shadowColor: '#000',
+    shadowColor: '#8A6A4A',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.10,
+    shadowRadius: 6,
+    elevation: 2,
   },
   md: {
-    shadowColor: '#000',
+    shadowColor: '#8A6A4A',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOpacity: 0.13,
+    shadowRadius: 12,
+    elevation: 4,
   },
   gold: {
-    shadowColor: '#F5C842',
+    shadowColor: '#C07A1A',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 5,
   },
 };
 

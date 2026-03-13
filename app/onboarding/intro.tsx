@@ -53,16 +53,16 @@ const styles = StyleSheet.create({
   heroImg: { position: 'absolute', top: 0, left: 0, right: 0, height: '60%' },
   overlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(15,15,19,0.5)',
+    backgroundColor: 'rgba(237,232,223,0.40)',
   },
   topBar: {
     position: 'absolute', left: Spacing.xl, right: Spacing.xl,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
   progressTrack: { flexDirection: 'row', gap: 6 },
-  progressDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.3)' },
+  progressDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(42,26,10,0.2)' },
   progressDotActive: { backgroundColor: Colors.gold, width: 24, borderRadius: 3 },
-  stepLabel: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.5)', fontWeight: FontWeight.medium },
+  stepLabel: { fontSize: FontSize.sm, color: 'rgba(42,26,10,0.4)', fontWeight: FontWeight.medium },
   content: {
     flex: 1, justifyContent: 'flex-end', padding: Spacing.xl, gap: Spacing.md,
   },

@@ -22,10 +22,10 @@ const SKIN_COLORS: Record<string, string> = {
 };
 
 const CLOTHING_COLORS: Record<string, string> = {
-  casual: '#3A3A5C',
-  athletic: '#1A3A5C',
-  business: '#2A2A4A',
-  streetwear: '#2A3A2A',
+  casual: '#8A6A4A',
+  athletic: '#4A6A8A',
+  business: '#4A5A7A',
+  streetwear: '#5A6A4A',
 };
 
 const SIZES = {

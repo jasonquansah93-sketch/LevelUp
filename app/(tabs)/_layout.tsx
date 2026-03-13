@@ -15,6 +15,13 @@ export default function TabLayout() {
     backgroundColor: Colors.surface,
     borderTopWidth: 1,
     borderTopColor: Colors.surfaceBorder,
+    ...{
+      shadowColor: '#8A6A4A',
+      shadowOffset: { width: 0, height: -2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 8,
+    },
   };
 
   return (
