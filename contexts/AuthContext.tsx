@@ -130,12 +130,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signup = async (email: string, password: string, name: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { full_name: name } },
     });
     if (error) throw new Error(error.message);
+
+    // If email confirmation is required, the session won't be set automatically.
+    // Sign in immediately so the user is logged in without needing to verify.
+    if (!data.session) {
+      const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+      if (loginError) {
+        // User was created but can't log in yet — surface a helpful message
+        throw new Error('Account created. Please check your email to confirm, then sign in.');
+      }
+    }
   };
 
   const sendOTP = async (email: string) => {
