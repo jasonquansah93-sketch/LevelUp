@@ -74,8 +74,6 @@ export default function AuthScreen() {
       const msg = e.message || '';
       if (msg.toLowerCase().includes('invalid login')) {
         setError('Incorrect email or password.');
-      } else if (msg.toLowerCase().includes('email not confirmed')) {
-        setError('Please verify your email before signing in.');
       } else {
         setError(msg || 'Sign-in failed. Please try again.');
       }

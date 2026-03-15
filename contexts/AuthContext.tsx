@@ -141,10 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Sign in immediately so the user is logged in without needing to verify.
     if (!data.session) {
       const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
-      if (loginError) {
-        // User was created but can't log in yet — surface a helpful message
-        throw new Error('Account created. Please check your email to confirm, then sign in.');
-      }
+      if (loginError) throw new Error(loginError.message);
     }
   };
 
