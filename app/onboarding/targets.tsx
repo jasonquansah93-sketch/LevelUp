@@ -11,6 +11,74 @@ import { Colors, Spacing, Radius, FontSize, FontWeight, CategoryColors } from '@
 
 type Intensity = 'light' | 'standard' | 'focused';
 
+// Per-category intensity descriptions: [light, standard, focused]
+const INTENSITY_CONTEXT: Record<string, {
+  light: { tagline: string; detail: string };
+  standard: { tagline: string; detail: string };
+  focused: { tagline: string; detail: string };
+}> = {
+  fitness: {
+    light: { tagline: 'Easy start', detail: 'Lower weekly target. Build momentum without pressure. Great if you are just getting started.' },
+    standard: { tagline: 'Balanced challenge', detail: 'Recommended for most users. Sustainable effort with meaningful weekly progress.' },
+    focused: { tagline: 'Training mode', detail: 'Higher weekly target. Best if fitness is a top priority and you train regularly.' },
+  },
+  health: {
+    light: { tagline: 'Gentle habits', detail: 'Smallest target. Focus on building awareness before intensity.' },
+    standard: { tagline: 'Daily care', detail: 'Balanced approach to nutrition, hydration, and recovery.' },
+    focused: { tagline: 'Committed', detail: 'High weekly target for those who treat health as a non-negotiable priority.' },
+  },
+  sleep: {
+    light: { tagline: 'Sleep awareness', detail: 'Low commitment. Good if sleep improvement is a side goal.' },
+    standard: { tagline: 'Consistent rest', detail: 'Regular sleep habits. Recommended for most users.' },
+    focused: { tagline: 'Strict discipline', detail: 'Demanding weekly target. For those who want a hard sleep schedule.' },
+  },
+  learning: {
+    light: { tagline: 'Casual exploration', detail: 'Light weekly target. Great for when learning is secondary to other goals.' },
+    standard: { tagline: 'Steady growth', detail: 'Balanced weekly sessions. Builds real skills over time.' },
+    focused: { tagline: 'Intensive study', detail: 'High target. Choose this if skill-building is your main focus this week.' },
+  },
+  reading: {
+    light: { tagline: 'Light habit', detail: 'Low-pressure reading goal. Good for getting a habit started.' },
+    standard: { tagline: 'Regular reader', detail: 'Realistic weekly reading target that fits a busy schedule.' },
+    focused: { tagline: 'Deep reading', detail: 'High weekly page count. For those who want reading to be a core habit.' },
+  },
+  focus: {
+    light: { tagline: 'Entry level', detail: 'Build consistency first. Fewer deep work sessions required per week.' },
+    standard: { tagline: 'Solid focus', detail: 'Balanced weekly deep work. Recommended for knowledge workers.' },
+    focused: { tagline: 'Elite mode', detail: 'Demanding focus target. For users who want maximum cognitive output.' },
+  },
+  discipline: {
+    light: { tagline: 'Habit building', detail: 'Early-stage discipline. Good for building your first routines.' },
+    standard: { tagline: 'Solid consistency', detail: 'Regular discipline practices. The right choice for most users.' },
+    focused: { tagline: 'Iron mode', detail: 'High weekly target. For users who want structure and real pressure.' },
+  },
+  order: {
+    light: { tagline: 'Light tidying', detail: 'Low-frequency order habits. Good if this is a background goal.' },
+    standard: { tagline: 'Regular order', detail: 'Consistent cleaning and organization habits throughout the week.' },
+    focused: { tagline: 'Thorough', detail: 'High weekly target. For those who want a consistently clean environment.' },
+  },
+  career: {
+    light: { tagline: 'Casual effort', detail: 'Low investment. Good if career development is not a priority this week.' },
+    standard: { tagline: 'Steady growth', detail: 'Balanced weekly career actions. Good for long-term visibility.' },
+    focused: { tagline: 'Ambitious', detail: 'High weekly career target. For those actively building their next chapter.' },
+  },
+  communication: {
+    light: { tagline: 'Low-friction', detail: 'Light weekly communication practice. Good for building the habit first.' },
+    standard: { tagline: 'Regular practice', detail: 'Consistent weekly effort on clarity and intentional communication.' },
+    focused: { tagline: 'Sharp', detail: 'High weekly target. For those actively improving communication as a skill.' },
+  },
+  finance: {
+    light: { tagline: 'Awareness mode', detail: 'Low frequency. Building basic financial awareness and tracking habits.' },
+    standard: { tagline: 'Regular tracking', detail: 'Steady weekly financial habits. Recommended for most users.' },
+    focused: { tagline: 'Committed', detail: 'High weekly target. For those actively working on financial discipline.' },
+  },
+  social: {
+    light: { tagline: 'Gentle connection', detail: 'Low weekly effort. Good if social goals are secondary this week.' },
+    standard: { tagline: 'Regular outreach', detail: 'Balanced weekly social actions. Maintains key relationships.' },
+    focused: { tagline: 'Actively connected', detail: 'High weekly target. For those who want social growth to be a priority.' },
+  },
+};
+
 export default function TargetSetup() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -30,7 +98,8 @@ export default function TargetSetup() {
     Object.fromEntries(selectedCategories.map((c) => [c, 'standard']))
   );
 
-  const setIntensity = (catId: string, val: Intensity) => setIntensities((p) => ({ ...p, [catId]: val }));
+  const setIntensity = (catId: string, val: Intensity) =>
+    setIntensities((p) => ({ ...p, [catId]: val }));
 
   const handleFinish = async () => {
     const activeCategories: ActiveCategory[] = selectedCategories.map((catId) => {
@@ -43,14 +112,13 @@ export default function TargetSetup() {
     const activeQuests: ActiveQuest[] = [];
     for (const catId of selectedCategories) {
       const questIds = selectedQuestsMap[catId] || [];
-      // If no quests selected for category, auto-add the top 2 easiest ones
       const idsToUse = questIds.length > 0
         ? questIds
         : QUEST_TEMPLATES
-          .filter((q) => q.categoryId === catId)
-          .sort((a, b) => a.characterXp - b.characterXp)
-          .slice(0, 2)
-          .map((q) => q.id);
+            .filter((q) => q.categoryId === catId)
+            .sort((a, b) => a.characterXp - b.characterXp)
+            .slice(0, 2)
+            .map((q) => q.id);
 
       for (const questId of idsToUse) {
         const template = QUEST_TEMPLATES.find((q) => q.id === questId);
@@ -73,21 +141,36 @@ export default function TargetSetup() {
     router.replace('/(tabs)');
   };
 
+  const INTENSITY_LEVELS: { id: Intensity; icon: string }[] = [
+    { id: 'light', icon: 'battery-1-bar' },
+    { id: 'standard', icon: 'battery-3-bar' },
+    { id: 'focused', icon: 'battery-full' },
+  ];
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Top bar */}
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <MaterialIcons name="arrow-back" size={24} color={Colors.textSecondary} />
         </Pressable>
-        <Text style={styles.topTitle}>Weekly Targets</Text>
-        <View style={{ width: 24 }} />
+        <View style={styles.progressTrack}>
+          {[0, 1, 2, 3].map((i) => (
+            <View key={i} style={[styles.dot, i === 3 && styles.dotActive]} />
+          ))}
+        </View>
+        <Text style={styles.stepLabel}>Step 4 of 4</Text>
       </View>
 
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Set your intensity</Text>
-        <Text style={styles.subtitle}>
-          How ambitious do you want to be this week? You can always adjust this later.
-        </Text>
+        <Text style={styles.title}>Set your ambition</Text>
+        <View style={styles.fairnessCard}>
+          <MaterialIcons name="balance" size={16} color={Colors.info} />
+          <Text style={styles.fairnessText}>
+            Your score is measured against your own target — not others. Every level stays fair.
+          </Text>
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
@@ -96,10 +179,14 @@ export default function TargetSetup() {
           if (!cat) return null;
           const color = CategoryColors[cat.name] || Colors.gold;
           const intensity = intensities[catId] || 'standard';
+          const ctx = INTENSITY_CONTEXT[catId];
+          const currentCtx = ctx?.[intensity];
           const labels = cat.intensityLabels || { light: 'Light', standard: 'Standard', focused: 'Focused' };
+          const credits = cat.weeklyTargetCredits[intensity];
 
           return (
             <View key={catId} style={styles.catCard}>
+              {/* Category header */}
               <View style={styles.catHeader}>
                 <View style={[styles.catIcon, { backgroundColor: color + '22' }]}>
                   <MaterialIcons name={cat.icon as any} size={22} color={color} />
@@ -107,36 +194,50 @@ export default function TargetSetup() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.catName}>{cat.name}</Text>
                   <Text style={styles.catTarget}>
-                    {cat.weeklyTargetCredits[intensity]} credits/week target
+                    <Text style={{ color, fontWeight: FontWeight.bold }}>{credits}</Text>
+                    {' '}credits/week target
                   </Text>
                 </View>
               </View>
+
+              {/* Intensity selector */}
               <View style={styles.intensityRow}>
-                {(['light', 'standard', 'focused'] as Intensity[]).map((level) => (
-                  <Pressable
-                    key={level}
-                    style={({ pressed }) => [
-                      styles.intensityChip,
-                      intensity === level && { backgroundColor: color, borderColor: color },
-                      pressed && styles.pressed,
-                    ]}
-                    onPress={() => setIntensity(catId, level)}
-                  >
-                    <Text style={[styles.intensityText, intensity === level && styles.intensityTextActive]}>
-                      {labels[level]}
-                    </Text>
-                  </Pressable>
-                ))}
+                {INTENSITY_LEVELS.map(({ id: level }) => {
+                  const isActive = intensity === level;
+                  return (
+                    <Pressable
+                      key={level}
+                      style={({ pressed }) => [
+                        styles.intensityChip,
+                        isActive && { backgroundColor: color, borderColor: color },
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={() => setIntensity(catId, level)}
+                    >
+                      <Text style={[styles.intensityLabel, isActive && styles.intensityLabelActive]}>
+                        {labels[level]}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
+
+              {/* Context explanation for selected intensity */}
+              {currentCtx && (
+                <View style={[styles.contextBox, { borderLeftColor: color }]}>
+                  <Text style={[styles.contextTagline, { color }]}>{currentCtx.tagline}</Text>
+                  <Text style={styles.contextDetail}>{currentCtx.detail}</Text>
+                </View>
+              )}
             </View>
           );
         })}
 
-        {/* Summary */}
+        {/* Bottom summary card */}
         <View style={styles.summaryCard}>
-          <MaterialIcons name="info-outline" size={18} color={Colors.info} />
+          <MaterialIcons name="check-circle-outline" size={18} color={Colors.success} />
           <Text style={styles.summaryText}>
-            Your rank is always measured against your own target — not against others with different categories.
+            You can always change your intensity from the Profile tab after you start.
           </Text>
         </View>
 
@@ -162,11 +263,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     padding: Spacing.lg, paddingBottom: Spacing.md,
   },
-  topTitle: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
-  header: { paddingHorizontal: Spacing.xl, gap: Spacing.sm, marginBottom: Spacing.md },
+  progressTrack: { flexDirection: 'row', gap: 6 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.surfaceBorder },
+  dotActive: { backgroundColor: Colors.gold, width: 18 },
+  stepLabel: { fontSize: FontSize.sm, color: Colors.textMuted, fontWeight: FontWeight.medium },
+
+  header: { paddingHorizontal: Spacing.xl, gap: Spacing.sm, marginBottom: Spacing.sm },
   title: { fontSize: FontSize.xxl, fontWeight: FontWeight.heavy, color: Colors.textPrimary },
-  subtitle: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },
+
+  fairnessCard: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm,
+    backgroundColor: Colors.infoSoft, borderRadius: Radius.md,
+    padding: Spacing.md, borderWidth: 1, borderColor: Colors.info + '30',
+  },
+  fairnessText: { fontSize: FontSize.sm, color: Colors.info, flex: 1, lineHeight: 20 },
+
   scroll: { padding: Spacing.xl, paddingTop: Spacing.sm, gap: Spacing.md },
+
   catCard: {
     backgroundColor: Colors.surface, borderRadius: Radius.lg,
     padding: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder, gap: Spacing.md,
@@ -174,21 +287,31 @@ const styles = StyleSheet.create({
   catHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   catIcon: { width: 44, height: 44, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
   catName: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  catTarget: { fontSize: FontSize.sm, color: Colors.textSecondary },
+  catTarget: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
+
   intensityRow: { flexDirection: 'row', gap: Spacing.sm },
   intensityChip: {
     flex: 1, height: 40, borderRadius: Radius.round,
     backgroundColor: Colors.surfaceElevated, borderWidth: 1.5, borderColor: Colors.surfaceBorder,
     alignItems: 'center', justifyContent: 'center',
   },
-  intensityText: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textSecondary },
-  intensityTextActive: { color: '#fff' },
+  intensityLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textSecondary },
+  intensityLabelActive: { color: '#fff' },
+
+  contextBox: {
+    backgroundColor: Colors.surfaceElevated, borderRadius: Radius.sm,
+    padding: Spacing.sm, borderLeftWidth: 3, gap: 2,
+  },
+  contextTagline: { fontSize: FontSize.sm, fontWeight: FontWeight.bold },
+  contextDetail: { fontSize: FontSize.xs, color: Colors.textSecondary, lineHeight: 18 },
+
   summaryCard: {
     flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm,
-    backgroundColor: Colors.infoSoft, borderRadius: Radius.md,
-    padding: Spacing.md, borderWidth: 1, borderColor: Colors.info + '30',
+    backgroundColor: Colors.successSoft, borderRadius: Radius.md,
+    padding: Spacing.md, borderWidth: 1, borderColor: Colors.success + '30',
   },
-  summaryText: { fontSize: FontSize.sm, color: Colors.info, flex: 1, lineHeight: 20 },
+  summaryText: { fontSize: FontSize.sm, color: Colors.success, flex: 1, lineHeight: 20 },
+
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     padding: Spacing.xl, backgroundColor: Colors.bg,
