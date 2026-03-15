@@ -52,10 +52,16 @@ export default function AuthScreen() {
     if (!email.trim()) { setError('Please enter your email.'); return; }
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
     setLoading(true);
+    console.log('[AuthScreen] handleEmailSignup started for:', email.trim().toLowerCase());
     try {
       await signup(email.trim().toLowerCase(), password, name.trim());
-      // Auth state change will redirect via app/index.tsx
+      console.log('[AuthScreen] signup() resolved — redirecting to onboarding');
+      // Explicitly redirect after successful signup.
+      // The auth state listener in app/index.tsx also handles this,
+      // but we redirect here too so there is no delay or missed state change.
+      router.replace('/onboarding/intro');
     } catch (e: any) {
+      console.error('[AuthScreen] signup error:', e.message);
       setError(e.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
@@ -67,10 +73,14 @@ export default function AuthScreen() {
     if (!email.trim()) { setError('Please enter your email.'); return; }
     if (!password.trim()) { setError('Please enter your password.'); return; }
     setLoading(true);
+    console.log('[AuthScreen] handleEmailLogin started for:', email.trim().toLowerCase());
     try {
       await login(email.trim().toLowerCase(), password);
-      // Auth state change will redirect via app/index.tsx
+      console.log('[AuthScreen] login() resolved — auth state listener will redirect');
+      // The onAuthStateChange listener in AuthContext + app/index.tsx handles redirect.
+      // No explicit router.replace here; let index.tsx decide based on isOnboarded.
     } catch (e: any) {
+      console.error('[AuthScreen] login error:', e.message);
       const msg = e.message || '';
       if (msg.toLowerCase().includes('invalid login')) {
         setError('Incorrect email or password.');
