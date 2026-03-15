@@ -49,16 +49,21 @@ export default function AuthScreen() {
   const handleEmailSignup = async () => {
     clearError();
     if (!name.trim()) { setError('Please enter your name.'); return; }
-    if (!email.trim()) { setError('Please enter your email.'); return; }
+    // Basic format check only — fake emails like test@example.com are fine for dev
+    const emailVal = email.trim().toLowerCase();
+    if (!emailVal.includes('@') || !emailVal.includes('.')) {
+      setError('Please enter a valid email format (e.g. test@example.com).');
+      return;
+    }
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
     setLoading(true);
-    console.log('[AuthScreen] handleEmailSignup started for:', email.trim().toLowerCase());
+    console.log('[AuthScreen] handleEmailSignup started for:', emailVal);
     try {
-      await signup(email.trim().toLowerCase(), password, name.trim());
-      console.log('[AuthScreen] signup() resolved — redirecting to onboarding');
-      // Explicitly redirect after successful signup.
-      // The auth state listener in app/index.tsx also handles this,
-      // but we redirect here too so there is no delay or missed state change.
+      await signup(emailVal, password, name.trim());
+      console.log('[AuthScreen] signup() resolved — navigating to onboarding');
+      // Always explicitly navigate — both PATH A (setSession) and PATH B
+      // (signInWithPassword) should have fired auth state, but explicit
+      // replace here ensures we don't get stuck if the listener fires slowly.
       router.replace('/onboarding/intro');
     } catch (e: any) {
       console.error('[AuthScreen] signup error:', e.message);

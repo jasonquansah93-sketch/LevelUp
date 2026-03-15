@@ -134,13 +134,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   /**
-   * DEV SIGNUP — uses the dev-signup Edge Function (service role) to:
-   *   1. Create the user with email pre-confirmed (admin.createUser)
-   *   2. Sign them in immediately and return a real session
-   *   3. Set the session locally so onAuthStateChange fires
+   * DEV SIGNUP — two-path approach for frictionless dev testing:
    *
-   * This bypasses Supabase's email confirmation requirement entirely
-   * for the development/testing phase.
+   * Path A (Primary): Calls the dev-signup Edge Function via GoTrue REST API
+   *   which creates the user with email_confirm=true and returns a live session.
+   *
+   * Path B (Fallback): If edge function fails for any reason, uses standard
+   *   supabase.auth.signUp() — which also works because the DB trigger
+   *   auto_confirm_email_on_signup sets email_confirmed_at=NOW() on INSERT,
+   *   then immediately signs in with signInWithPassword.
+   *
+   * Either path results in an immediate authenticated session with no inbox needed.
    */
   const signup = async (email: string, password: string, name: string) => {
     console.log('[Auth] signup() called for:', email);
@@ -149,44 +153,82 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const anonKey = (supabase as any).supabaseKey as string;
     const functionUrl = `${supabaseUrl}/functions/v1/dev-signup`;
 
-    console.log('[Auth] Calling dev-signup edge function:', functionUrl);
-
-    const response = await fetch(functionUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': anonKey,
-        'Authorization': `Bearer ${anonKey}`,
-      },
-      body: JSON.stringify({ email, password, name }),
-    });
-
-    const result = await response.json();
-
-    if (!response.ok || result.error) {
-      console.error('[Auth] dev-signup error:', result.error);
-      throw new Error(result.error || 'Signup failed');
-    }
-
-    console.log('[Auth] dev-signup success — session received:', !!result.session);
-
-    if (result.session) {
-      // Manually set the session in the Supabase client
-      const { error: sessionError } = await supabase.auth.setSession({
-        access_token: result.session.access_token,
-        refresh_token: result.session.refresh_token,
+    // ── PATH A: Edge Function (GoTrue REST, bypasses admin IP restriction) ───
+    try {
+      console.log('[Auth] Trying dev-signup edge function...');
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': anonKey,
+          'Authorization': `Bearer ${anonKey}`,
+        },
+        body: JSON.stringify({ email, password, name }),
       });
 
-      if (sessionError) {
-        console.error('[Auth] setSession error:', sessionError.message);
-        throw new Error(sessionError.message);
+      const result = await response.json();
+      console.log('[Auth] Edge function response:', response.status, result.error ?? 'ok');
+
+      if (response.ok && result.session && !result.error) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: result.session.access_token,
+          refresh_token: result.session.refresh_token,
+        });
+        if (sessionError) throw new Error(sessionError.message);
+        console.log('[Auth] PATH A success — session set via edge function');
+        return; // ✅ done
       }
 
-      console.log('[Auth] Session set — onAuthStateChange should fire shortly');
-    } else {
-      console.error('[Auth] dev-signup returned no session');
-      throw new Error('No session returned from signup');
+      console.warn('[Auth] Edge function did not return session, trying PATH B. Error:', result.error);
+    } catch (edgeFnErr: any) {
+      console.warn('[Auth] Edge function threw:', edgeFnErr.message, '— falling back to PATH B');
     }
+
+    // ── PATH B: Fallback — standard signUp + immediate signIn ────────────────
+    // The auto_confirm_email_on_signup DB trigger ensures email_confirmed_at
+    // is set on INSERT, so signInWithPassword works immediately after signUp.
+    console.log('[Auth] PATH B: standard signUp + signInWithPassword');
+
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: name } },
+    });
+
+    if (signUpError) {
+      // If user already exists, skip to sign-in
+      const isExisting =
+        signUpError.message.toLowerCase().includes('already') ||
+        signUpError.message.toLowerCase().includes('registered');
+
+      if (!isExisting) {
+        console.error('[Auth] signUp error:', signUpError.message);
+        throw new Error(signUpError.message);
+      }
+      console.log('[Auth] User already exists — proceeding to sign-in');
+    } else {
+      console.log('[Auth] signUp success, user:', signUpData.user?.id, 'session:', !!signUpData.session);
+    }
+
+    // Short wait for DB trigger to commit the auto-confirmation
+    await new Promise((r) => setTimeout(r, 400));
+
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (signInError) {
+      console.error('[Auth] PATH B signIn error:', signInError.message);
+      throw new Error(
+        signInError.message.includes('Email not confirmed')
+          ? 'Auto-confirmation failed. Please try again.'
+          : signInError.message
+      );
+    }
+
+    console.log('[Auth] PATH B success — signed in:', signInData.user?.id);
+    // onAuthStateChange fires automatically; no need to call setSession
   };
 
   const login = async (email: string, password: string) => {
