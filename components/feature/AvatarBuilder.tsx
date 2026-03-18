@@ -1,151 +1,141 @@
 /**
- * AvatarBuilder — Live modular avatar preview component
+ * AvatarBuilder — Live modular avatar preview component (v2)
  *
- * Architecture:
- * - Composite layer: full-body image (base × clothing) + face-head image (base × hairstyle)
- * - Skin tone: displayed as overlay ring tint + color swatch indicator
- * - Body type: CSS transform scaleX/scaleY on body image container
- * - Real-time: every prop change instantly updates all layers
+ * Render architecture:
+ * ┌─────────────────────────────────────┐
+ * │  Body/clothing layer (full-body PNG) │  ← BODY_IMAGES[base_clothing]
+ * │    • scaleX/Y for body type          │
+ * │  Face portrait (bust PNG) overlaid   │  ← FACE_IMAGES[base_hair_tone]
+ * │    • encodes both skin + hairstyle   │
+ * │  Clothing accent bar (decorative)    │
+ * └─────────────────────────────────────┘
+ *
+ * Changing ANY of: gender, skin tone, hairstyle, clothing, body type
+ * immediately swaps the correct pre-rendered image — no tinting required.
  */
 
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { Image } from 'expo-image';
 import {
-  BODY_IMAGES, HAIR_IMAGES, SKIN_TONES, BODY_TYPE_SCALES,
-  CLOTHING_ACCENTS, genderToBase,
+  BODY_IMAGES,
+  FACE_IMAGES,
+  SKIN_TONES,
+  BODY_TYPE_SCALES,
+  CLOTHING_ACCENTS,
+  genderToBase,
+  getFaceImage,
 } from '@/constants/avatarAssets';
 import { AvatarConfig } from '@/contexts/GameContext';
 import { Colors, Radius } from '@/constants/theme';
 
+// ─── FULL BUILDER PREVIEW ────────────────────────────────────────────────────
+
 interface AvatarBuilderProps {
   config: AvatarConfig;
-  size?: number;           // container height
-  showSkinRing?: boolean;  // show skin-tone colored ring around avatar
-  animate?: boolean;       // pulse animation on change
+  /** Container height in px (width is derived proportionally) */
+  size?: number;
+  animate?: boolean;
 }
 
-export function AvatarBuilder({
-  config,
-  size = 280,
-  showSkinRing = true,
-  animate = true,
-}: AvatarBuilderProps) {
+export function AvatarBuilder({ config, size = 280, animate = true }: AvatarBuilderProps) {
   const base = genderToBase(config.genderPresentation);
-  const clothingKey = `${base}_${config.clothingStyle}`;
-  const hairKey = `${base}_${config.hairstyle}`;
-
-  const bodyImage = BODY_IMAGES[clothingKey] ?? BODY_IMAGES[`${base}_casual`];
-  const hairImage = HAIR_IMAGES[hairKey] ?? HAIR_IMAGES[`${base}_short`];
-
+  const bodyKey = `${base}_${config.clothingStyle}`;
+  const bodyImage = BODY_IMAGES[bodyKey] ?? BODY_IMAGES[`${base}_casual`];
+  const faceImage = getFaceImage(base, config.hairstyle, config.skinTone);
   const bodyScale = BODY_TYPE_SCALES[config.bodyType] ?? BODY_TYPE_SCALES.average;
-  const skinColor = SKIN_TONES[config.skinTone]?.color ?? SKIN_TONES.tone2.color;
   const clothingAccent = CLOTHING_ACCENTS[config.clothingStyle] ?? CLOTHING_ACCENTS.casual;
 
-  // Animate on any config change
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  const prevConfigRef = useRef<string>('');
+  // Flash-in animation on every option change
+  const flashAnim = useRef(new Animated.Value(1)).current;
+  const springAnim = useRef(new Animated.Value(1)).current;
   const configKey = `${base}_${config.skinTone}_${config.hairstyle}_${config.clothingStyle}_${config.bodyType}`;
+  const prevKey = useRef('');
 
   useEffect(() => {
-    if (!animate || prevConfigRef.current === configKey) return;
-    prevConfigRef.current = configKey;
-
-    // Quick flash-in effect on change
+    if (!animate || prevKey.current === configKey) return;
+    prevKey.current = configKey;
     Animated.sequence([
       Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 0.65, duration: 80, useNativeDriver: true }),
-        Animated.timing(scaleAnim, { toValue: 0.97, duration: 80, useNativeDriver: true }),
+        Animated.timing(flashAnim, { toValue: 0.7, duration: 70, useNativeDriver: true }),
+        Animated.timing(springAnim, { toValue: 0.96, duration: 70, useNativeDriver: true }),
       ]),
       Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
-        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 80, friction: 8 }),
+        Animated.timing(flashAnim, { toValue: 1, duration: 160, useNativeDriver: true }),
+        Animated.spring(springAnim, { toValue: 1, useNativeDriver: true, tension: 90, friction: 8 }),
       ]),
     ]).start();
   }, [configKey]);
 
   const bodyWidth = size * 0.72;
   const bodyHeight = size;
-  const hairSize = size * 0.38;
+  // Face portrait sits over the upper portion of the body
+  const faceSize = size * 0.52;
+  // How far from the top the face sits (head is top ~35% of body image)
+  const faceTop = size * 0.01;
 
   return (
-    <View style={[styles.root, { width: bodyWidth * 1.3, height: bodyHeight }]}>
-      {/* Skin tone ambient glow ring */}
-      {showSkinRing && (
-        <View
-          style={[
-            styles.skinRing,
-            {
-              width: bodyWidth * 1.2,
-              height: bodyHeight * 0.88,
-              borderRadius: bodyWidth * 0.6,
-              borderColor: skinColor + '90',
-              bottom: 0,
-            },
-          ]}
-        />
-      )}
-
-      {/* Body / clothing layer — scales with body type */}
+    <View style={[styles.root, { width: bodyWidth * 1.28, height: bodyHeight }]}>
+      {/* ── Body / clothing layer ── */}
       <Animated.View
         style={[
           styles.bodyLayer,
           {
             width: bodyWidth,
             height: bodyHeight,
+            bottom: 0,
             transform: [
               { scaleX: bodyScale.scaleX },
               { scaleY: bodyScale.scaleY },
             ],
-            opacity: fadeAnim,
+            opacity: flashAnim,
           },
         ]}
       >
         <Image
-          key={clothingKey}
+          key={bodyKey}
           source={bodyImage}
           style={{ width: bodyWidth, height: bodyHeight }}
-          contentFit="contain"
-          transition={120}
-        />
-      </Animated.View>
-
-      {/* Face / hair layer — floats on top of body at the head position */}
-      <Animated.View
-        style={[
-          styles.hairLayer,
-          {
-            width: hairSize,
-            height: hairSize,
-            top: size * 0.01,
-            opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }],
-          },
-        ]}
-      >
-        <Image
-          key={hairKey}
-          source={hairImage}
-          style={{ width: hairSize, height: hairSize }}
           contentFit="contain"
           transition={100}
         />
       </Animated.View>
 
-      {/* Clothing accent bar — bottom indicator of active clothing style */}
+      {/* ── Face / hair / skin portrait layer ── */}
+      <Animated.View
+        style={[
+          styles.faceLayer,
+          {
+            width: faceSize,
+            height: faceSize,
+            top: faceTop,
+            opacity: flashAnim,
+            transform: [{ scale: springAnim }],
+          },
+        ]}
+      >
+        <Image
+          key={`${base}_${config.hairstyle}_${config.skinTone}`}
+          source={faceImage}
+          style={{ width: faceSize, height: faceSize }}
+          contentFit="contain"
+          transition={90}
+        />
+      </Animated.View>
+
+      {/* ── Clothing style accent bar (bottom indicator) ── */}
       <View
         style={[
-          styles.clothingBar,
-          { backgroundColor: clothingAccent, width: bodyWidth * 0.5 },
+          styles.accentBar,
+          { backgroundColor: clothingAccent, width: bodyWidth * 0.45 },
         ]}
       />
     </View>
   );
 }
 
-// ─── MINI DISPLAY variant (for profile, leaderboard, etc.) ───────────────────
+// ─── COMPACT DISPLAY VARIANT ──────────────────────────────────────────────────
+// Used in tabs, leaderboard, profile header, etc.
 
 interface AvatarDisplayProps {
   avatar: AvatarConfig;
@@ -155,33 +145,35 @@ interface AvatarDisplayProps {
 }
 
 const DISPLAY_SIZES = {
-  sm: { outer: 44 },
-  md: { outer: 64 },
-  lg: { outer: 96 },
-  xl: { outer: 130 },
-};
+  sm: 44,
+  md: 64,
+  lg: 96,
+  xl: 130,
+} as const;
 
 export function AvatarDisplay({ avatar, level, size = 'md', showLevel = true }: AvatarDisplayProps) {
-  const dims = DISPLAY_SIZES[size];
-  const outerSize = dims.outer;
-  const base = genderToBase(avatar.genderPresentation);
-  const bodyKey = `${base}_${avatar.clothingStyle}`;
-  const hairKey = `${base}_${avatar.hairstyle}`;
-  const bodyScale = BODY_TYPE_SCALES[avatar.bodyType] ?? BODY_TYPE_SCALES.average;
-  const skinColor = SKIN_TONES[avatar.skinTone]?.color ?? SKIN_TONES.tone2.color;
+  const outerSize = DISPLAY_SIZES[size];
   const levelFontSize = outerSize < 50 ? 9 : outerSize < 80 ? 10 : 12;
+  const skinColor = SKIN_TONES[avatar.skinTone]?.color ?? SKIN_TONES.tone2.color;
 
+  // AI-generated photo takes priority
   if (avatar.photoUrl) {
     return (
-      <View style={[dStyles.wrapper, { width: outerSize, height: outerSize }]}>
+      <View style={{ width: outerSize, height: outerSize }}>
         <Image
           source={{ uri: avatar.photoUrl }}
-          style={[dStyles.photoImg, { width: outerSize, height: outerSize, borderRadius: outerSize / 2, borderColor: Colors.gold + '80' }]}
+          style={{
+            width: outerSize,
+            height: outerSize,
+            borderRadius: outerSize / 2,
+            borderWidth: 2,
+            borderColor: Colors.gold + '80',
+          }}
           contentFit="cover"
           transition={200}
         />
         {showLevel && (
-          <View style={dStyles.levelBadge}>
+          <View style={[dStyles.levelBadge, { minWidth: outerSize * 0.32, height: outerSize * 0.32, borderRadius: outerSize * 0.16 }]}>
             <Text style={[dStyles.levelText, { fontSize: levelFontSize }]}>{level}</Text>
           </View>
         )}
@@ -189,11 +181,14 @@ export function AvatarDisplay({ avatar, level, size = 'md', showLevel = true }: 
     );
   }
 
+  const base = genderToBase(avatar.genderPresentation);
+  const bodyKey = `${base}_${avatar.clothingStyle}`;
   const bodyImg = BODY_IMAGES[bodyKey] ?? BODY_IMAGES[`${base}_casual`];
-  const hairImg = HAIR_IMAGES[hairKey] ?? HAIR_IMAGES[`${base}_short`];
+  const faceImg = getFaceImage(base, avatar.hairstyle, avatar.skinTone);
+  const bodyScale = BODY_TYPE_SCALES[avatar.bodyType] ?? BODY_TYPE_SCALES.average;
 
   return (
-    <View style={[dStyles.wrapper, { width: outerSize, height: outerSize }]}>
+    <View style={{ width: outerSize, height: outerSize, position: 'relative' }}>
       {/* Skin-tinted circle background */}
       <View
         style={[
@@ -202,37 +197,60 @@ export function AvatarDisplay({ avatar, level, size = 'md', showLevel = true }: 
             width: outerSize,
             height: outerSize,
             borderRadius: outerSize / 2,
-            backgroundColor: skinColor + '25',
-            borderColor: skinColor + '50',
+            backgroundColor: skinColor + '28',
+            borderColor: skinColor + '55',
           },
         ]}
       >
-        {/* Body */}
-        <View style={{ width: outerSize, height: outerSize, transform: [{ scaleX: bodyScale.scaleX }], overflow: 'hidden' }}>
+        {/* Body inside circle */}
+        <View
+          style={{
+            width: outerSize,
+            height: outerSize,
+            transform: [{ scaleX: bodyScale.scaleX }],
+            overflow: 'hidden',
+          }}
+        >
           <Image
             source={bodyImg}
             style={{ width: outerSize, height: outerSize }}
             contentFit="contain"
-            transition={100}
+            transition={80}
           />
         </View>
       </View>
-      {/* Hair face overlay */}
+
+      {/* Face overlay — top portion of circle */}
       <View
         style={[
-          dStyles.hairOverlay,
-          { width: outerSize * 0.7, height: outerSize * 0.7, top: 0, left: outerSize * 0.15 },
+          dStyles.faceOverlay,
+          {
+            width: outerSize * 0.72,
+            height: outerSize * 0.72,
+            top: 0,
+            left: outerSize * 0.14,
+          },
         ]}
       >
         <Image
-          source={hairImg}
-          style={{ width: outerSize * 0.7, height: outerSize * 0.7 }}
+          source={faceImg}
+          style={{ width: outerSize * 0.72, height: outerSize * 0.72 }}
           contentFit="contain"
           transition={80}
         />
       </View>
+
       {showLevel && (
-        <View style={dStyles.levelBadge}>
+        <View
+          style={[
+            dStyles.levelBadge,
+            {
+              minWidth: outerSize * 0.32,
+              height: outerSize * 0.32,
+              borderRadius: outerSize * 0.16,
+            },
+          ]}
+        >
           <Text style={[dStyles.levelText, { fontSize: levelFontSize }]}>{level}</Text>
         </View>
       )}
@@ -240,51 +258,41 @@ export function AvatarDisplay({ avatar, level, size = 'md', showLevel = true }: 
   );
 }
 
+// ─── STYLES ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   root: {
     alignItems: 'center',
     justifyContent: 'flex-end',
     position: 'relative',
   },
-  skinRing: {
-    position: 'absolute',
-    borderWidth: 2.5,
-    bottom: 0,
-  },
   bodyLayer: {
     position: 'absolute',
-    bottom: 0,
     alignItems: 'center',
     justifyContent: 'flex-end',
   },
-  hairLayer: {
+  faceLayer: {
     position: 'absolute',
     alignSelf: 'center',
   },
-  clothingBar: {
+  accentBar: {
     position: 'absolute',
     bottom: -1,
     height: 3,
     borderRadius: 2,
-    opacity: 0.6,
+    opacity: 0.55,
   },
 });
 
 const dStyles = StyleSheet.create({
-  wrapper: {
-    position: 'relative',
-  },
   circle: {
     overflow: 'hidden',
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'flex-end',
   },
-  hairOverlay: {
+  faceOverlay: {
     position: 'absolute',
-  },
-  photoImg: {
-    borderWidth: 2,
   },
   levelBadge: {
     position: 'absolute',
@@ -292,14 +300,12 @@ const dStyles = StyleSheet.create({
     right: -2,
     backgroundColor: Colors.gold,
     borderRadius: Radius.round,
-    minWidth: 20,
-    height: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
   },
   levelText: {
-    color: Colors.textInverse ?? '#fff',
+    color: '#FFFFFF',
     fontWeight: '700',
     lineHeight: 14,
   },

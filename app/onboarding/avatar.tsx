@@ -15,7 +15,7 @@ import { AvatarConfig } from '@/contexts/GameContext';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 import { getSupabaseClient } from '@/template';
 import { AvatarBuilder } from '@/components/feature/AvatarBuilder';
-import { SKIN_TONES, CLOTHING_ACCENTS } from '@/constants/avatarAssets';
+import { SKIN_TONES, SKIN_TONE_ORDER, CLOTHING_ACCENTS } from '@/constants/avatarAssets';
 
 type CreationPath = 'builder' | 'photo';
 type GenerationState = 'idle' | 'generating' | 'done' | 'error';
@@ -56,7 +56,7 @@ const BODY_OPTIONS = [
   { id: 'broad', label: 'Broad' },
 ];
 
-const SKIN_ORDER = ['tone1', 'tone2', 'tone3', 'tone4', 'tone5', 'tone6'];
+const SKIN_ORDER = SKIN_TONE_ORDER;
 
 export default function AvatarCreation() {
   const router = useRouter();
