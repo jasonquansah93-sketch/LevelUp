@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useGame } from '@/hooks/useGame';
 import { useAuth } from '@/hooks/useAuth';
 import { AvatarDisplay } from '@/components/feature/AvatarDisplay';
@@ -53,6 +54,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout, upgradeToPremium: authUpgrade } = useAuth();
   const { state, getXpInfo, upgradeToPremium } = useGame();
+  const router = useRouter();
   const [paywallVisible, setPaywallVisible] = useState(false);
 
   const xpInfo = getXpInfo();
@@ -150,7 +152,7 @@ export default function ProfileScreen() {
               icon="face"
               label="Edit Avatar"
               subtitle="Update your character look"
-              onPress={() => Alert.alert('Edit Avatar', 'Avatar editor coming soon.')}
+              onPress={() => router.push('/edit-avatar')}
             />
             <View style={styles.rowDivider} />
             <ProfileRow
