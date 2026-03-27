@@ -12,10 +12,10 @@ import { AvatarBuilder } from '@/components/feature/AvatarBuilder';
 import { SKIN_TONES, SKIN_TONE_ORDER, CLOTHING_ACCENTS } from '@/constants/avatarAssets';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 
+// Only 2 base characters — Neutral removed.
 const GENDER_OPTIONS = [
   { id: 'masculine', label: 'Masculine', icon: 'male' as const },
   { id: 'feminine', label: 'Feminine', icon: 'female' as const },
-  { id: 'neutral', label: 'Neutral', icon: 'person' as const },
 ];
 
 const HAIRSTYLE_OPTIONS = [
@@ -194,9 +194,9 @@ export default function EditAvatarScreen() {
             />
           </View>
 
-          {/* Avatar stage */}
+          {/* Avatar stage — transparent container, avatar PNG floats freely */}
           <View style={styles.previewStage}>
-            <AvatarBuilder config={config} size={268} animate />
+            <AvatarBuilder config={config} size={272} animate />
           </View>
 
           <Text style={styles.previewHint}>
@@ -449,9 +449,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.goldSoft,
     alignItems: 'center',
     justifyContent: 'flex-end',
-    paddingTop: Spacing.xl,
-    paddingBottom: Spacing.md,
-    minHeight: 310,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.sm,
+    minHeight: 318,
+    overflow: 'hidden',
   },
   previewHint: {
     fontSize: FontSize.xs,

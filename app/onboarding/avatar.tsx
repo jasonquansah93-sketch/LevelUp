@@ -28,10 +28,10 @@ const GENERATION_STEPS = [
   'Almost ready...',
 ];
 
+// Only 2 base characters exist — Neutral has been removed.
 const GENDER_OPTIONS = [
   { id: 'masculine', label: 'Masculine', icon: 'male' as const },
   { id: 'feminine', label: 'Feminine', icon: 'female' as const },
-  { id: 'neutral', label: 'Neutral', icon: 'person' as const },
 ];
 
 const HAIRSTYLE_OPTIONS = [
@@ -74,7 +74,7 @@ export default function AvatarCreation() {
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   const [config, setConfig] = useState<AvatarConfig>({
-    genderPresentation: 'masculine',
+    genderPresentation: 'masculine', // default to masculine (no neutral)
     skinTone: 'tone2',
     hairstyle: 'short',
     clothingStyle: 'casual',
@@ -200,11 +200,9 @@ export default function AvatarCreation() {
               />
             </View>
 
-            {/* Live avatar */}
+            {/* Live avatar — transparent container, no white box */}
             <View style={styles.previewStage}>
-              <View style={styles.previewBg}>
-                <AvatarBuilder config={config} size={260} animate />
-              </View>
+              <AvatarBuilder config={config} size={270} animate />
               <Text style={styles.previewHint}>
                 Your character updates live as you choose options below
               </Text>
@@ -572,11 +570,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   previewStage: {
+    // Soft warm gradient feel without a white box behind the avatar
     backgroundColor: Colors.goldSoft,
-    alignItems: 'center', paddingTop: Spacing.xl, paddingBottom: Spacing.md, gap: Spacing.md,
-    minHeight: 300,
+    alignItems: 'center',
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.sm,
+    gap: Spacing.sm,
+    minHeight: 310,
+    overflow: 'hidden',
   },
-  previewBg: { alignItems: 'center', justifyContent: 'flex-end' },
   previewHint: {
     fontSize: FontSize.xs, color: Colors.textMuted,
     textAlign: 'center', paddingHorizontal: Spacing.xl, lineHeight: 18,
