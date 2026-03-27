@@ -143,14 +143,43 @@ export const SKIN_TONE_ORDER = [
   'tone1', 'tone2', 'tone3', 'tone4', 'tone5', 'tone6',
 ] as const;
 
+// ─── BODY TYPE IMAGES ────────────────────────────────────────────────────────
+// 8 dedicated full-body transparent PNGs — one per base × body-type.
+// Only the silhouette/build changes; face, hair, outfit, pose, canvas are fixed.
+// Key: `${base}_body_${bodyType}`  e.g. 'masculine_body_lean'
+
+export const BODY_TYPE_IMAGES: Record<string, any> = {
+  // ── Masculine ────────────────────────────────────────────────────────────────
+  masculine_body_lean:     require('@/assets/avatars/masculine_body_lean.png'),
+  masculine_body_average:  require('@/assets/avatars/masculine_body_average.png'),
+  masculine_body_athletic: require('@/assets/avatars/masculine_body_athletic.png'),
+  masculine_body_broad:    require('@/assets/avatars/masculine_body_broad.png'),
+  // ── Feminine ─────────────────────────────────────────────────────────────────
+  feminine_body_lean:     require('@/assets/avatars/feminine_body_lean.png'),
+  feminine_body_average:  require('@/assets/avatars/feminine_body_average.png'),
+  feminine_body_athletic: require('@/assets/avatars/feminine_body_athletic.png'),
+  feminine_body_broad:    require('@/assets/avatars/feminine_body_broad.png'),
+};
+
+/**
+ * Resolve the body-type image for a given gender presentation and body type.
+ * Falls back to 'average' if the key is not found.
+ */
+export function getBodyTypeImage(genderPresentation: string, bodyType: string): any {
+  const base = genderPresentation === 'feminine' ? 'feminine' : 'masculine';
+  const key = `${base}_body_${bodyType}`;
+  return BODY_TYPE_IMAGES[key] ?? BODY_TYPE_IMAGES[`${base}_body_average`];
+}
+
 // ─── BODY TYPE SCALE FACTORS ──────────────────────────────────────────────────
-// Applied as CSS transform on the avatar image container at render time.
+// Kept as minor fine-tune transforms applied on top of body-type images.
+// These are small adjustments only — the primary silhouette is driven by the image.
 
 export const BODY_TYPE_SCALES: Record<string, { scaleX: number; scaleY: number }> = {
-  lean:     { scaleX: 0.88, scaleY: 1.02 },
+  lean:     { scaleX: 0.97, scaleY: 1.00 },
   average:  { scaleX: 1.00, scaleY: 1.00 },
-  athletic: { scaleX: 1.07, scaleY: 1.00 },
-  broad:    { scaleX: 1.14, scaleY: 0.98 },
+  athletic: { scaleX: 1.00, scaleY: 1.00 },
+  broad:    { scaleX: 1.00, scaleY: 1.00 },
 };
 
 // ─── CLOTHING ACCENT COLORS ───────────────────────────────────────────────────

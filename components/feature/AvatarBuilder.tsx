@@ -31,9 +31,11 @@ import {
   AVATAR_IMAGES,
   SKIN_TONES,
   BODY_TYPE_SCALES,
+  BODY_TYPE_IMAGES,
   CLOTHING_ACCENTS,
   genderToBase,
   getAvatarImage,
+  getBodyTypeImage,
 } from '@/constants/avatarAssets';
 import { AvatarConfig } from '@/contexts/GameContext';
 import { Colors, Radius } from '@/constants/theme';
@@ -53,7 +55,15 @@ interface AvatarBuilderProps {
 
 export function AvatarBuilder({ config, size = 300, animate = true }: AvatarBuilderProps) {
   const base = genderToBase(config.genderPresentation);
-  const avatarImage = getAvatarImage(base, config.hairstyle, config.skinTone);
+
+  // Body-type image: dedicated asset that shows the correct silhouette/build.
+  // Skin tone + hairstyle images are used when those selectors change.
+  // The body-type image is the PRIMARY driver of the avatar's shape.
+  const bodyTypeImage = getBodyTypeImage(config.genderPresentation, config.bodyType);
+  // Hairstyle + skin image is overlaid as a secondary face layer (used for compact display);
+  // in the full builder we show the body-type image as the main visual.
+  const avatarImage = bodyTypeImage;
+
   const bodyScale = BODY_TYPE_SCALES[config.bodyType] ?? BODY_TYPE_SCALES.average;
   const clothingAccent = CLOTHING_ACCENTS[config.clothingStyle] ?? CLOTHING_ACCENTS.casual;
 
@@ -101,12 +111,13 @@ export function AvatarBuilder({ config, size = 300, animate = true }: AvatarBuil
             height: containerHeight,
             opacity: flashAnim,
             transform: [
-              { scaleX: bodyScale.scaleX * springAnim.__getValue() },
+              { scaleX: bodyScale.scaleX },
               { scale: springAnim },
             ],
           },
         ]}
       >
+        {/* Body-type image — drives the silhouette/build */}
         <Image
           key={configKey}
           source={avatarImage}
