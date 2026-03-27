@@ -36,6 +36,7 @@ import {
   genderToBase,
   getAvatarImage,
   getBodyTypeImage,
+  getClothingImage,
 } from '@/constants/avatarAssets';
 import { AvatarConfig } from '@/contexts/GameContext';
 import { Colors, Radius } from '@/constants/theme';
@@ -56,13 +57,11 @@ interface AvatarBuilderProps {
 export function AvatarBuilder({ config, size = 300, animate = true }: AvatarBuilderProps) {
   const base = genderToBase(config.genderPresentation);
 
-  // Body-type image: dedicated asset that shows the correct silhouette/build.
-  // Skin tone + hairstyle images are used when those selectors change.
-  // The body-type image is the PRIMARY driver of the avatar's shape.
-  const bodyTypeImage = getBodyTypeImage(config.genderPresentation, config.bodyType);
-  // Hairstyle + skin image is overlaid as a secondary face layer (used for compact display);
-  // in the full builder we show the body-type image as the main visual.
-  const avatarImage = bodyTypeImage;
+  // Clothing image: dedicated asset that shows only the outfit variation.
+  // Same character identity (face/hair/body) — only the outfit changes.
+  // This is the PRIMARY driver for the clothing selector.
+  const clothingImage = getClothingImage(config.genderPresentation, config.clothingStyle);
+  const avatarImage = clothingImage;
 
   const bodyScale = BODY_TYPE_SCALES[config.bodyType] ?? BODY_TYPE_SCALES.average;
   const clothingAccent = CLOTHING_ACCENTS[config.clothingStyle] ?? CLOTHING_ACCENTS.casual;
@@ -117,7 +116,7 @@ export function AvatarBuilder({ config, size = 300, animate = true }: AvatarBuil
           },
         ]}
       >
-        {/* Body-type image — drives the silhouette/build */}
+        {/* Clothing image — drives the outfit style */}
         <Image
           key={configKey}
           source={avatarImage}

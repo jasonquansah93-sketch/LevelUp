@@ -171,6 +171,34 @@ export function getBodyTypeImage(genderPresentation: string, bodyType: string): 
   return BODY_TYPE_IMAGES[key] ?? BODY_TYPE_IMAGES[`${base}_body_average`];
 }
 
+// ─── CLOTHING STYLE IMAGES ──────────────────────────────────────────────────
+// 8 dedicated full-body transparent PNGs — one per base × clothing style.
+// Only the outfit changes; face, hair, body shape, pose, canvas are identical.
+// Key: `${base}_clothing_${style}`  e.g. 'masculine_clothing_casual'
+
+export const CLOTHING_IMAGES: Record<string, any> = {
+  // ── Masculine ──────────────────────────────────────────────────────────────
+  masculine_clothing_casual:     require('@/assets/avatars/masculine_clothing_casual.png'),
+  masculine_clothing_athletic:   require('@/assets/avatars/masculine_clothing_athletic.png'),
+  masculine_clothing_business:   require('@/assets/avatars/masculine_clothing_business.png'),
+  masculine_clothing_streetwear: require('@/assets/avatars/masculine_clothing_streetwear.png'),
+  // ── Feminine ───────────────────────────────────────────────────────────────
+  feminine_clothing_casual:      require('@/assets/avatars/feminine_clothing_casual.png'),
+  feminine_clothing_athletic:    require('@/assets/avatars/feminine_clothing_athletic.png'),
+  feminine_clothing_business:    require('@/assets/avatars/feminine_clothing_business.png'),
+  feminine_clothing_streetwear:  require('@/assets/avatars/feminine_clothing_streetwear.png'),
+};
+
+/**
+ * Resolve the clothing-style image for a given gender presentation and style.
+ * Falls back to 'casual' if the key is not found.
+ */
+export function getClothingImage(genderPresentation: string, clothingStyle: string): any {
+  const base = genderPresentation === 'feminine' ? 'feminine' : 'masculine';
+  const key = `${base}_clothing_${clothingStyle}`;
+  return CLOTHING_IMAGES[key] ?? CLOTHING_IMAGES[`${base}_clothing_casual`];
+}
+
 // ─── BODY TYPE SCALE FACTORS ──────────────────────────────────────────────────
 // Kept as minor fine-tune transforms applied on top of body-type images.
 // These are small adjustments only — the primary silhouette is driven by the image.
