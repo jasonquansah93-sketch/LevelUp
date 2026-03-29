@@ -1,28 +1,35 @@
 /**
- * AvatarBuilder — v5 (asset-based body type)
+ * AvatarBuilder — v6 (all-selectors fix)
  *
  * ═══════════════════════════════════════════════════════════
  *  RENDER ARCHITECTURE  (read before modifying)
  * ═══════════════════════════════════════════════════════════
  *
- *  LAYER 1 — PRIMARY IMAGE: BODY TYPE ASSET
+ *  LAYER 1 — FACE / IDENTITY IMAGE  (primary)
  *  ────────────────────────────────────────────────────
- *  Source file:  {gender}_body_{bodyType}.png
- *  Driven by:    genderPresentation + bodyType
- *  These are true dedicated body-type PNGs — NOT scale transforms.
- *  Lean / Average / Athletic / Broad each have their own asset.
- *  Rule: NO scaleX/scaleY hacks. Body type is purely asset-driven.
+ *  Source:   getAvatarImage(base, hairstyle, skinTone)
+ *  Driven by: genderPresentation + hairstyle + skinTone
+ *  These 60 pre-rendered PNGs encode skin tone + hairstyle.
+ *  Any change to gender, skin, or hair swaps this image.
+ *
+ *  LAYER 1 MODIFIER — BODY TYPE SCALE
+ *  ────────────────────────────────────────────────────
+ *  Applied as scaleX / scaleY CSS transform on the face image.
+ *  Driven by: bodyType  (lean / average / athletic / broad)
+ *  Rule: scale only — never replaces the face image source.
  *
  *  LAYER 2 — CLOTHING EXTENSION (style chip indicator)
  *  ────────────────────────────────────────────────────
  *  Method:  Styled pill label below the avatar.
- *  Rule:    NEVER replaces the primary image source.
+ *  Rule:    NEVER replaces or overlays the primary image.
  *
  * ═══════════════════════════════════════════════════════════
- *  PRIMARY SOURCE:  getBodyTypeImage(genderPresentation, bodyType)
- *  Clothing is an EXTENSION chip — it never replaces it.
- *  Skin tone + hairstyle selectors persist to config/DB for
- *  future composite rendering; body type drives the preview.
+ *  ALL 5 SELECTORS UPDATE THE PREVIEW:
+ *  genderPresentation → base char for face image
+ *  skinTone           → face image lookup
+ *  hairstyle          → face image lookup
+ *  bodyType           → scaleX/scaleY transform on face image
+ *  clothingStyle      → chip indicator label + colour
  * ═══════════════════════════════════════════════════════════
  */
 
@@ -37,7 +44,6 @@ import {
   CLOTHING_LABELS,
   genderToBase,
   getAvatarImage,
-  getBodyTypeImage,
 } from '@/constants/avatarAssets';
 import { AvatarConfig } from '@/contexts/GameContext';
 import { Colors, Radius, FontSize, FontWeight, Spacing } from '@/constants/theme';
@@ -56,21 +62,26 @@ interface AvatarBuilderProps {
 export function AvatarBuilder({ config, size = 300, animate = true }: AvatarBuilderProps) {
   const base = genderToBase(config.genderPresentation);
 
-  // ── LAYER 1: Body-type asset — dedicated PNG per body type ──────────────────
-  // lean / average / athletic / broad each have their own full-body transparent PNG.
-  // This is the PRIMARY image. No scaleX/scaleY transforms are applied to it.
-  // Skin tone + hairstyle chips persist to config/DB; body type drives the preview.
-  const avatarImage = getBodyTypeImage(config.genderPresentation, config.bodyType);
+  // ── LAYER 1: Face / identity image ─────────────────────────────────────────
+  // Driven by base + hairstyle + skinTone — all three must be in the lookup.
+  // Any of these three changing produces a different image → visible update.
+  const avatarImage = getAvatarImage(base, config.hairstyle, config.skinTone);
 
-  // ── LAYER 2: Clothing extension (indicator chip only) ────────────────────────
+  // ── LAYER 1 MODIFIER: Body type scale ──────────────────────────────────────
+  // Applies scaleX / scaleY to the face image to adjust silhouette width.
+  // Does NOT swap the image source — body type is purely a CSS transform here.
+  const bodyScale = BODY_TYPE_SCALES[config.bodyType] ?? BODY_TYPE_SCALES.average;
+
+  // ── LAYER 2: Clothing style chip ────────────────────────────────────────────
   const clothingAccent = CLOTHING_ACCENTS[config.clothingStyle] ?? CLOTHING_ACCENTS.casual;
   const clothingLabel  = CLOTHING_LABELS[config.clothingStyle]  ?? 'Casual';
 
-  // Config key — any selector change triggers the feedback animation
-  const configKey = `${base}_${config.bodyType}_${config.clothingStyle}_${config.skinTone}_${config.hairstyle}`;
+  // Derived preview key — ALL 5 selector values included.
+  // Any selector change produces a new key → animation fires + image recomputed.
+  const configKey = `${config.genderPresentation}_${config.skinTone}_${config.hairstyle}_${config.clothingStyle}_${config.bodyType}`;
   const prevKey = useRef('');
 
-  const flashAnim = useRef(new Animated.Value(1)).current;
+  const flashAnim  = useRef(new Animated.Value(1)).current;
   const springAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -79,28 +90,26 @@ export function AvatarBuilder({ config, size = 300, animate = true }: AvatarBuil
 
     Animated.sequence([
       Animated.parallel([
-        Animated.timing(flashAnim, { toValue: 0.72, duration: 60, useNativeDriver: true }),
-        Animated.timing(springAnim, { toValue: 0.97, duration: 60, useNativeDriver: true }),
+        Animated.timing(flashAnim,  { toValue: 0.72, duration: 60,  useNativeDriver: true }),
+        Animated.timing(springAnim, { toValue: 0.97, duration: 60,  useNativeDriver: true }),
       ]),
       Animated.parallel([
-        Animated.timing(flashAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
-        Animated.spring(springAnim, {
-          toValue: 1,
-          useNativeDriver: true,
-          tension: 100,
-          friction: 8,
-        }),
+        Animated.timing(flashAnim,  { toValue: 1,    duration: 180, useNativeDriver: true }),
+        Animated.spring(springAnim, { toValue: 1, useNativeDriver: true, tension: 100, friction: 8 }),
       ]),
     ]).start();
   }, [configKey]);
 
-  // Canvas: 2:3 ratio, controlled by `size` (= height)
+  // Canvas: 2:3 ratio, height controlled by `size` prop
   const containerHeight = size;
   const containerWidth  = size * (2 / 3);
 
   return (
     <View style={[styles.root, { width: containerWidth + 40, height: containerHeight + 36 }]}>
-      {/* ── LAYER 1: Body-type asset — no transform scaling ─────────────────── */}
+      {/*
+        LAYER 1: Face / identity image with body-type scale modifier.
+        key forces a remount when image source changes, preventing stale renders.
+      */}
       <Animated.View
         style={[
           styles.avatarWrap,
@@ -108,13 +117,16 @@ export function AvatarBuilder({ config, size = 300, animate = true }: AvatarBuil
             width: containerWidth,
             height: containerHeight,
             opacity: flashAnim,
-            transform: [{ scale: springAnim }],
+            transform: [
+              { scale: springAnim },
+              { scaleX: bodyScale.scaleX },
+              { scaleY: bodyScale.scaleY },
+            ],
           },
         ]}
       >
-        {/* Dedicated body-type PNG — silhouette is baked into the asset, not CSS */}
         <Image
-          key={`bodytype_${base}_${config.bodyType}`}
+          key={`face_${base}_${config.hairstyle}_${config.skinTone}`}
           source={avatarImage}
           style={{ width: containerWidth, height: containerHeight }}
           contentFit="contain"
@@ -122,7 +134,7 @@ export function AvatarBuilder({ config, size = 300, animate = true }: AvatarBuil
         />
       </Animated.View>
 
-      {/* ── LAYER 2: Clothing style indicator chip ────────────────────────── */}
+      {/* LAYER 2: Clothing style indicator chip */}
       <View style={[styles.clothingChip, { backgroundColor: clothingAccent + '22', borderColor: clothingAccent + '66' }]}>
         <View style={[styles.clothingDot, { backgroundColor: clothingAccent }]} />
         <Text style={[styles.clothingChipText, { color: clothingAccent }]}>{clothingLabel}</Text>
@@ -193,8 +205,10 @@ export function AvatarDisplay({
     );
   }
 
-  // Compact display uses body-type asset as primary (matches builder preview)
-  const avatarImg = getBodyTypeImage(avatar.genderPresentation, avatar.bodyType);
+  // Compact display uses face/identity image as primary (matches builder preview)
+  // base + hairstyle + skinTone → same logic as the full AvatarBuilder
+  const avatarBase = avatar.genderPresentation === 'feminine' ? 'f' : 'm';
+  const avatarImg = getAvatarImage(avatarBase, avatar.hairstyle, avatar.skinTone);
 
   return (
     <View style={{ width: outerSize, height: outerSize }}>
