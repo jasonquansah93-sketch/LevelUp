@@ -1,26 +1,23 @@
 /**
- * AvatarBuilder — v3 (single-image, transparent, aligned)
+ * AvatarBuilder — v3 (single integrated image)
  *
- * Render architecture follows the reference layer spec:
+ * Render architecture — single image:
  *
  *   ┌─────────────────────────────────────────┐
- *   │  Container: transparent, sized to match  │
- *   │  preview area. No background color.      │
- *   │                                          │
- *   │  Single full-body avatar Image           │
- *   │    • transparent PNG                     │
- *   │    • same 2:3 canvas for every asset     │
- *   │    • same foot baseline / head anchor    │
- *   │    • skin tone + hairstyle encoded in    │
- *   │      the image itself                    │
- *   │    • body type applied via scaleX/scaleY │
- *   │    • clothing accent shown as thin       │
- *   │      indicator bar only (decorative)     │
+ *   │  Container: transparent, 2:3 aspect     │
+ *   │                                         │
+ *   │  ONE integrated avatar image            │
+ *   │    • body_{base}_{hair}_{tone}.png      │
+ *   │    • transparent PNG, same canvas       │
+ *   │    • body-type scale applied via CSS    │
  *   └─────────────────────────────────────────┘
  *
- * Changing ANY option (gender, skin, hair, body, clothing) triggers:
- *   1. Key change on the Image → expo-image swaps asset with cross-fade
- *   2. Animated flash-spring on the container for tactile feedback
+ * Selectors that drive the preview:
+ *   • Gender      → base character
+ *   • Skin tone   → integrated image
+ *   • Hairstyle   → integrated image
+ *   • Body type   → scaleX transform
+ *   • Clothing    → accent color indicator only (future: separate layer)
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -28,15 +25,11 @@ import { View, StyleSheet, Animated } from 'react-native';
 import { Image } from 'expo-image';
 import { Text } from 'react-native';
 import {
-  AVATAR_IMAGES,
   SKIN_TONES,
   BODY_TYPE_SCALES,
-  BODY_TYPE_IMAGES,
   CLOTHING_ACCENTS,
   genderToBase,
   getAvatarImage,
-  getBodyTypeImage,
-  getClothingImage,
 } from '@/constants/avatarAssets';
 import { AvatarConfig } from '@/contexts/GameContext';
 import { Colors, Radius } from '@/constants/theme';
@@ -47,8 +40,6 @@ interface AvatarBuilderProps {
   config: AvatarConfig;
   /**
    * Height of the preview in px. Width is derived from the 2:3 aspect ratio.
-   * The image fills this container with contentFit="contain" so transparency
-   * is preserved around the character silhouette.
    */
   size?: number;
   animate?: boolean;
@@ -57,20 +48,17 @@ interface AvatarBuilderProps {
 export function AvatarBuilder({ config, size = 300, animate = true }: AvatarBuilderProps) {
   const base = genderToBase(config.genderPresentation);
 
-  // Clothing image: dedicated asset that shows only the outfit variation.
-  // Same character identity (face/hair/body) — only the outfit changes.
-  // This is the PRIMARY driver for the clothing selector.
-  const clothingImage = getClothingImage(config.genderPresentation, config.clothingStyle);
-  const avatarImage = clothingImage;
+  // Single integrated image encoding hairstyle + skin tone
+  const avatarImage = getAvatarImage(base, config.hairstyle, config.skinTone);
 
+  // Body type: minor scale adjustment
   const bodyScale = BODY_TYPE_SCALES[config.bodyType] ?? BODY_TYPE_SCALES.average;
   const clothingAccent = CLOTHING_ACCENTS[config.clothingStyle] ?? CLOTHING_ACCENTS.casual;
 
-  // Track config changes to trigger animation
+  // Config key — any selector change triggers the feedback animation
   const configKey = `${base}_${config.skinTone}_${config.hairstyle}_${config.clothingStyle}_${config.bodyType}`;
   const prevKey = useRef('');
 
-  // Two animated values: opacity flash + subtle scale spring
   const flashAnim = useRef(new Animated.Value(1)).current;
   const springAnim = useRef(new Animated.Value(1)).current;
 
@@ -95,13 +83,12 @@ export function AvatarBuilder({ config, size = 300, animate = true }: AvatarBuil
     ]).start();
   }, [configKey]);
 
-  // Canvas dimensions: maintain 2:3 ratio, controlled by `size` (= height)
+  // Canvas: 2:3 ratio, controlled by `size` (= height)
   const containerHeight = size;
   const containerWidth = size * (2 / 3);
 
   return (
     <View style={[styles.root, { width: containerWidth + 40, height: containerHeight }]}>
-      {/* ── Single integrated avatar image ── */}
       <Animated.View
         style={[
           styles.avatarWrap,
@@ -109,31 +96,33 @@ export function AvatarBuilder({ config, size = 300, animate = true }: AvatarBuil
             width: containerWidth,
             height: containerHeight,
             opacity: flashAnim,
-            transform: [
-              { scaleX: bodyScale.scaleX },
-              { scale: springAnim },
-            ],
+            transform: [{ scale: springAnim }],
           },
         ]}
       >
-        {/* Clothing image — drives the outfit style */}
-        <Image
-          key={configKey}
-          source={avatarImage}
-          style={{ width: containerWidth, height: containerHeight }}
-          contentFit="contain"
-          transition={120}
-        />
+        {/* Single integrated avatar image */}
+        <Animated.View
+          style={{
+            width: containerWidth,
+            height: containerHeight,
+            transform: [{ scaleX: bodyScale.scaleX }],
+          }}
+        >
+          <Image
+            key={`avatar_${base}_${config.hairstyle}_${config.skinTone}_${config.bodyType}`}
+            source={avatarImage}
+            style={{ width: containerWidth, height: containerHeight }}
+            contentFit="contain"
+            transition={140}
+          />
+        </Animated.View>
       </Animated.View>
 
-      {/* ── Clothing accent indicator (thin bar at bottom, purely decorative) ── */}
+      {/* Clothing accent indicator (decorative) */}
       <View
         style={[
           styles.accentBar,
-          {
-            backgroundColor: clothingAccent,
-            width: containerWidth * 0.4,
-          },
+          { backgroundColor: clothingAccent, width: containerWidth * 0.4 },
         ]}
       />
     </View>
@@ -264,13 +253,12 @@ const styles = StyleSheet.create({
   root: {
     alignItems: 'center',
     justifyContent: 'flex-end',
-    // NO background color — container must be transparent so the PNG silhouette
-    // appears cut out against whatever surface is behind it.
+    // NO background — container transparent so silhouette appears cut out
   },
   avatarWrap: {
     alignItems: 'center',
     justifyContent: 'flex-end',
-    // NO overflow: 'hidden' — we must not clip the transparent PNG edges
+    // NO overflow: 'hidden' — must not clip transparent PNG edges
   },
   accentBar: {
     height: 3,
