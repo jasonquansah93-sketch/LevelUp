@@ -200,23 +200,43 @@ export function getClothingImage(genderPresentation: string, clothingStyle: stri
 }
 
 // ─── BODY TYPE SCALE FACTORS ──────────────────────────────────────────────────
-// Kept as minor fine-tune transforms applied on top of body-type images.
-// These are small adjustments only — the primary silhouette is driven by the image.
+// Applied as CSS scaleX + scaleY transforms on the PRIMARY identity image.
+// These values are deliberately distinct so each body type is visually readable.
+//
+// RULE: These are the ONLY place body type affects the preview.
+//       Body type must NEVER swap or replace the primary avatar image source.
+//
+//   lean     → noticeably narrower silhouette
+//   average  → neutral baseline (1.0 × 1.0)
+//   athletic → slightly wider + taller
+//   broad    → clearly wider, slightly compressed vertically
 
 export const BODY_TYPE_SCALES: Record<string, { scaleX: number; scaleY: number }> = {
-  lean:     { scaleX: 0.97, scaleY: 1.00 },
+  lean:     { scaleX: 0.85, scaleY: 1.02 },
   average:  { scaleX: 1.00, scaleY: 1.00 },
-  athletic: { scaleX: 1.00, scaleY: 1.00 },
-  broad:    { scaleX: 1.00, scaleY: 1.00 },
+  athletic: { scaleX: 1.07, scaleY: 1.01 },
+  broad:    { scaleX: 1.16, scaleY: 0.98 },
 };
 
 // ─── CLOTHING ACCENT COLORS ───────────────────────────────────────────────────
+// Used by the clothing chip indicator in AvatarBuilder (Layer 3).
+// RULE: These are for UI indicators ONLY — they never replace the primary image.
 
 export const CLOTHING_ACCENTS: Record<string, string> = {
   casual:     '#E8763A',
-  athletic:   '#2A2A2A',
+  athletic:   '#2A6AE8',
   business:   '#3D4F7A',
-  streetwear: '#4A4A4A',
+  streetwear: '#5A4A6A',
+};
+
+// ─── CLOTHING STYLE LABELS ────────────────────────────────────────────────────
+// Human-readable labels for the clothing chip indicator.
+
+export const CLOTHING_LABELS: Record<string, string> = {
+  casual:     'Casual',
+  athletic:   'Athletic',
+  business:   'Business',
+  streetwear: 'Streetwear',
 };
 
 // ─── LEGACY RE-EXPORTS (for backward compat with AvatarDisplay) ───────────────

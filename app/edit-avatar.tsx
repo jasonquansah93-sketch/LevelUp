@@ -9,7 +9,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useGame } from '@/hooks/useGame';
 import { AvatarConfig } from '@/contexts/GameContext';
 import { AvatarBuilder } from '@/components/feature/AvatarBuilder';
-import { SKIN_TONES, SKIN_TONE_ORDER, CLOTHING_ACCENTS } from '@/constants/avatarAssets';
+import { SKIN_TONES, SKIN_TONE_ORDER, CLOTHING_ACCENTS, CLOTHING_LABELS } from '@/constants/avatarAssets';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 
 // Only 2 base characters — Neutral removed.

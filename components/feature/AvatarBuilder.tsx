@@ -1,23 +1,34 @@
 /**
- * AvatarBuilder — v3 (single integrated image)
+ * AvatarBuilder — v4 (stable layered architecture)
  *
- * Render architecture — single image:
+ * ═══════════════════════════════════════════════════════════
+ *  RENDER ARCHITECTURE  (read before modifying)
+ * ═══════════════════════════════════════════════════════════
  *
- *   ┌─────────────────────────────────────────┐
- *   │  Container: transparent, 2:3 aspect     │
- *   │                                         │
- *   │  ONE integrated avatar image            │
- *   │    • body_{base}_{hair}_{tone}.png      │
- *   │    • transparent PNG, same canvas       │
- *   │    • body-type scale applied via CSS    │
- *   └─────────────────────────────────────────┘
+ *  LAYER 1 — PRIMARY IDENTITY (drives the main image)
+ *  ────────────────────────────────────────────────────
+ *  Source file:  body_{base}_{hair}_{tone}.png
+ *  Driven by:    genderPresentation + hairstyle + skinTone
+ *  These three selectors always control the visible avatar.
+ *  They MUST NOT be overridden by extension layers.
  *
- * Selectors that drive the preview:
- *   • Gender      → base character
- *   • Skin tone   → integrated image
- *   • Hairstyle   → integrated image
- *   • Body type   → scaleX transform
- *   • Clothing    → accent color indicator only (future: separate layer)
+ *  LAYER 2 — BODY TYPE EXTENSION (CSS scale on primary image)
+ *  ────────────────────────────────────────────────────────────
+ *  Method:  scaleX + scaleY transform on the primary image.
+ *  Values:  lean 0.88 / average 1.00 / athletic 1.06 / broad 1.14
+ *  Rule:    NEVER swaps the primary image for a different PNG.
+ *
+ *  LAYER 3 — CLOTHING EXTENSION (style chip indicator)
+ *  ────────────────────────────────────────────────────
+ *  Method:  Styled pill label below the avatar.
+ *  Rule:    NEVER replaces the primary image source.
+ *           Dedicated clothing PNGs exist in assets but are
+ *           reserved for a future explicit clothing-overlay layer.
+ *
+ * ═══════════════════════════════════════════════════════════
+ *  STABLE PRIMARY SOURCE:  getAvatarImage(base, hairstyle, skinTone)
+ *  Clothing & Body Type are EXTENSIONS — they never replace it.
+ * ═══════════════════════════════════════════════════════════
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -28,11 +39,12 @@ import {
   SKIN_TONES,
   BODY_TYPE_SCALES,
   CLOTHING_ACCENTS,
+  CLOTHING_LABELS,
   genderToBase,
   getAvatarImage,
 } from '@/constants/avatarAssets';
 import { AvatarConfig } from '@/contexts/GameContext';
-import { Colors, Radius } from '@/constants/theme';
+import { Colors, Radius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 
 // ─── FULL BUILDER PREVIEW ────────────────────────────────────────────────────
 
@@ -48,12 +60,18 @@ interface AvatarBuilderProps {
 export function AvatarBuilder({ config, size = 300, animate = true }: AvatarBuilderProps) {
   const base = genderToBase(config.genderPresentation);
 
-  // Single integrated image encoding hairstyle + skin tone
+  // ── LAYER 1: Primary identity image (base + hairstyle + skin tone) ──────────
+  // This is the ONLY source that drives the main avatar visual.
+  // Clothing and body type never replace this.
   const avatarImage = getAvatarImage(base, config.hairstyle, config.skinTone);
 
-  // Body type: minor scale adjustment
+  // ── LAYER 2: Body type extension (scale transform on primary image) ──────────
+  // Meaningful scale differences so each body type is visually distinct.
   const bodyScale = BODY_TYPE_SCALES[config.bodyType] ?? BODY_TYPE_SCALES.average;
+
+  // ── LAYER 3: Clothing extension (indicator only — does NOT replace image) ────
   const clothingAccent = CLOTHING_ACCENTS[config.clothingStyle] ?? CLOTHING_ACCENTS.casual;
+  const clothingLabel  = CLOTHING_LABELS[config.clothingStyle]  ?? 'Casual';
 
   // Config key — any selector change triggers the feedback animation
   const configKey = `${base}_${config.skinTone}_${config.hairstyle}_${config.clothingStyle}_${config.bodyType}`;
@@ -85,10 +103,11 @@ export function AvatarBuilder({ config, size = 300, animate = true }: AvatarBuil
 
   // Canvas: 2:3 ratio, controlled by `size` (= height)
   const containerHeight = size;
-  const containerWidth = size * (2 / 3);
+  const containerWidth  = size * (2 / 3);
 
   return (
-    <View style={[styles.root, { width: containerWidth + 40, height: containerHeight }]}>
+    <View style={[styles.root, { width: containerWidth + 40, height: containerHeight + 36 }]}>
+      {/* ── LAYER 1 + 2: Primary avatar image with body-type scale ─────────── */}
       <Animated.View
         style={[
           styles.avatarWrap,
@@ -100,16 +119,19 @@ export function AvatarBuilder({ config, size = 300, animate = true }: AvatarBuil
           },
         ]}
       >
-        {/* Single integrated avatar image */}
+        {/* Body type scale is applied here — it stretches the PRIMARY image only */}
         <Animated.View
           style={{
             width: containerWidth,
             height: containerHeight,
-            transform: [{ scaleX: bodyScale.scaleX }],
+            transform: [
+              { scaleX: bodyScale.scaleX },
+              { scaleY: bodyScale.scaleY },
+            ],
           }}
         >
           <Image
-            key={`avatar_${base}_${config.hairstyle}_${config.skinTone}_${config.bodyType}`}
+            key={`avatar_${base}_${config.hairstyle}_${config.skinTone}`}
             source={avatarImage}
             style={{ width: containerWidth, height: containerHeight }}
             contentFit="contain"
@@ -118,13 +140,12 @@ export function AvatarBuilder({ config, size = 300, animate = true }: AvatarBuil
         </Animated.View>
       </Animated.View>
 
-      {/* Clothing accent indicator (decorative) */}
-      <View
-        style={[
-          styles.accentBar,
-          { backgroundColor: clothingAccent, width: containerWidth * 0.4 },
-        ]}
-      />
+      {/* ── LAYER 3: Clothing style indicator chip ────────────────────────── */}
+      {/* This chip shows the active clothing style without replacing the image */}
+      <View style={[styles.clothingChip, { backgroundColor: clothingAccent + '22', borderColor: clothingAccent + '66' }]}>
+        <View style={[styles.clothingDot, { backgroundColor: clothingAccent }]} />
+        <Text style={[styles.clothingChipText, { color: clothingAccent }]}>{clothingLabel}</Text>
+      </View>
     </View>
   );
 }
@@ -260,11 +281,26 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     // NO overflow: 'hidden' — must not clip transparent PNG edges
   },
-  accentBar: {
-    height: 3,
-    borderRadius: 2,
-    opacity: 0.5,
-    marginTop: 6,
+  // Clothing style indicator — sits below avatar, clearly separate from image
+  clothingChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  clothingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  clothingChipText: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.semibold,
+    letterSpacing: 0.3,
   },
 });
 

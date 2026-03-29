@@ -15,7 +15,7 @@ import { AvatarConfig } from '@/contexts/GameContext';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 import { getSupabaseClient } from '@/template';
 import { AvatarBuilder } from '@/components/feature/AvatarBuilder';
-import { SKIN_TONES, SKIN_TONE_ORDER, CLOTHING_ACCENTS } from '@/constants/avatarAssets';
+import { SKIN_TONES, SKIN_TONE_ORDER, CLOTHING_ACCENTS, CLOTHING_LABELS } from '@/constants/avatarAssets';
 
 type CreationPath = 'builder' | 'photo';
 type GenerationState = 'idle' | 'generating' | 'done' | 'error';
