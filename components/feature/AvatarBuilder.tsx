@@ -1,35 +1,32 @@
 /**
- * AvatarBuilder — v6 (all-selectors fix)
+ * AvatarBuilder — v7 (MVP free tier — stable 3-factor preview)
  *
  * ═══════════════════════════════════════════════════════════
- *  RENDER ARCHITECTURE  (read before modifying)
+ *  FREE TIER PREVIEW ARCHITECTURE
  * ═══════════════════════════════════════════════════════════
  *
- *  LAYER 1 — FACE / IDENTITY IMAGE  (primary)
+ *  PRIMARY IMAGE — FACE / IDENTITY  (the ONLY visual layer)
  *  ────────────────────────────────────────────────────
- *  Source:   getAvatarImage(base, hairstyle, skinTone)
- *  Driven by: genderPresentation + hairstyle + skinTone
- *  These 60 pre-rendered PNGs encode skin tone + hairstyle.
- *  Any change to gender, skin, or hair swaps this image.
+ *  Source:    getAvatarImage(base, hairstyle, skinTone)
+ *  Driven by: genderPresentation + hairstyle + skinTone ONLY
+ *  60 pre-rendered PNGs encode skin tone + hairstyle.
  *
- *  LAYER 1 MODIFIER — BODY TYPE SCALE
+ *  INTENTIONALLY NOT VISUAL IN FREE TIER:
  *  ────────────────────────────────────────────────────
- *  Applied as scaleX / scaleY CSS transform on the face image.
- *  Driven by: bodyType  (lean / average / athletic / broad)
- *  Rule: scale only — never replaces the face image source.
+ *  bodyType     → saved to state/DB but does NOT alter the preview image
+ *  clothingStyle → saved to state/DB but does NOT alter the preview image
  *
- *  LAYER 2 — CLOTHING EXTENSION (style chip indicator)
- *  ────────────────────────────────────────────────────
- *  Method:  Styled pill label below the avatar.
- *  Rule:    NEVER replaces or overlays the primary image.
+ *  Both appear as chip indicators below the avatar so users
+ *  know their selection is saved. Premium AI Avatar Builder
+ *  will unlock full visual customization in a future release.
  *
  * ═══════════════════════════════════════════════════════════
- *  ALL 5 SELECTORS UPDATE THE PREVIEW:
- *  genderPresentation → base char for face image
- *  skinTone           → face image lookup
- *  hairstyle          → face image lookup
- *  bodyType           → scaleX/scaleY transform on face image
- *  clothingStyle      → chip indicator label + colour
+ *  VISUAL REACTIVITY MATRIX:
+ *  genderPresentation → YES (base character swap)
+ *  skinTone           → YES (image lookup)
+ *  hairstyle          → YES (image lookup)
+ *  bodyType           → NO  (chip only)
+ *  clothingStyle      → NO  (chip only)
  * ═══════════════════════════════════════════════════════════
  */
 
@@ -37,9 +34,9 @@ import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
 import { Image } from 'expo-image';
 import { Text } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import {
   SKIN_TONES,
-  BODY_TYPE_SCALES,
   CLOTHING_ACCENTS,
   CLOTHING_LABELS,
   genderToBase,
@@ -62,23 +59,24 @@ interface AvatarBuilderProps {
 export function AvatarBuilder({ config, size = 300, animate = true }: AvatarBuilderProps) {
   const base = genderToBase(config.genderPresentation);
 
-  // ── LAYER 1: Face / identity image ─────────────────────────────────────────
-  // Driven by base + hairstyle + skinTone — all three must be in the lookup.
-  // Any of these three changing produces a different image → visible update.
+  // ── PRIMARY IMAGE: Face / identity ────────────────────────────────────────
+  // ONLY these 3 inputs drive the visible preview image.
+  // bodyType and clothingStyle are intentionally excluded from the image lookup.
   const avatarImage = getAvatarImage(base, config.hairstyle, config.skinTone);
 
-  // ── LAYER 1 MODIFIER: Body type scale ──────────────────────────────────────
-  // Applies scaleX / scaleY to the face image to adjust silhouette width.
-  // Does NOT swap the image source — body type is purely a CSS transform here.
-  const bodyScale = BODY_TYPE_SCALES[config.bodyType] ?? BODY_TYPE_SCALES.average;
-
-  // ── LAYER 2: Clothing style chip ────────────────────────────────────────────
+  // ── CHIP INDICATORS (non-visual preferences) ────────────────────────────────
+  // Clothing and body type are saved in state/DB but do NOT change the image.
   const clothingAccent = CLOTHING_ACCENTS[config.clothingStyle] ?? CLOTHING_ACCENTS.casual;
   const clothingLabel  = CLOTHING_LABELS[config.clothingStyle]  ?? 'Casual';
 
-  // Derived preview key — ALL 5 selector values included.
-  // Any selector change produces a new key → animation fires + image recomputed.
-  const configKey = `${config.genderPresentation}_${config.skinTone}_${config.hairstyle}_${config.clothingStyle}_${config.bodyType}`;
+  const BODY_TYPE_LABELS: Record<string, string> = {
+    lean: 'Lean', average: 'Average', athletic: 'Athletic', broad: 'Broad',
+  };
+  const bodyLabel = BODY_TYPE_LABELS[config.bodyType] ?? 'Average';
+
+  // Animation key — only the 3 visually-reactive factors.
+  // clothingStyle and bodyType changes do NOT trigger the flash animation.
+  const configKey = `${config.genderPresentation}_${config.skinTone}_${config.hairstyle}`;
   const prevKey = useRef('');
 
   const flashAnim  = useRef(new Animated.Value(1)).current;
@@ -117,11 +115,7 @@ export function AvatarBuilder({ config, size = 300, animate = true }: AvatarBuil
             width: containerWidth,
             height: containerHeight,
             opacity: flashAnim,
-            transform: [
-              { scale: springAnim },
-              { scaleX: bodyScale.scaleX },
-              { scaleY: bodyScale.scaleY },
-            ],
+            transform: [{ scale: springAnim }],
           },
         ]}
       >
@@ -134,10 +128,16 @@ export function AvatarBuilder({ config, size = 300, animate = true }: AvatarBuil
         />
       </Animated.View>
 
-      {/* LAYER 2: Clothing style indicator chip */}
-      <View style={[styles.clothingChip, { backgroundColor: clothingAccent + '22', borderColor: clothingAccent + '66' }]}>
-        <View style={[styles.clothingDot, { backgroundColor: clothingAccent }]} />
-        <Text style={[styles.clothingChipText, { color: clothingAccent }]}>{clothingLabel}</Text>
+      {/* Non-visual preference chips — clothing & body type */}
+      <View style={styles.chipRow}>
+        <View style={[styles.chip, { backgroundColor: clothingAccent + '18', borderColor: clothingAccent + '55' }]}>
+          <View style={[styles.chipDot, { backgroundColor: clothingAccent }]} />
+          <Text style={[styles.chipText, { color: clothingAccent }]}>{clothingLabel}</Text>
+        </View>
+        <View style={[styles.chip, { backgroundColor: Colors.textMuted + '18', borderColor: Colors.textMuted + '55' }]}>
+          <MaterialIcons name="accessibility" size={9} color={Colors.textMuted} />
+          <Text style={[styles.chipText, { color: Colors.textMuted }]}>{bodyLabel}</Text>
+        </View>
       </View>
     </View>
   );
@@ -273,23 +273,29 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     // NO overflow: 'hidden' — must not clip transparent PNG edges
   },
-  // Clothing style indicator — sits below avatar, clearly separate from image
-  clothingChip: {
+  // Non-visual preference chips row
+  chipRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginTop: 8,
-    paddingHorizontal: 12,
+    gap: 4,
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
   },
-  clothingDot: {
+  chipDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
   },
-  clothingChipText: {
+  chipText: {
     fontSize: FontSize.xs,
     fontWeight: FontWeight.semibold,
     letterSpacing: 0.3,
