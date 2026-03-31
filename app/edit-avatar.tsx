@@ -9,7 +9,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useGame } from '@/hooks/useGame';
 import { AvatarConfig } from '@/contexts/GameContext';
 import { AvatarBuilder } from '@/components/feature/AvatarBuilder';
-import { SKIN_TONES, SKIN_TONE_ORDER, CLOTHING_ACCENTS, CLOTHING_LABELS } from '@/constants/avatarAssets';
+import { SKIN_TONES, SKIN_TONE_ORDER } from '@/constants/avatarAssets';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 
 // Only 2 base characters — Neutral removed.
@@ -24,20 +24,6 @@ const HAIRSTYLE_OPTIONS = [
   { id: 'long', label: 'Long' },
   { id: 'buzz', label: 'Buzz Cut' },
   { id: 'bald', label: 'Bald' },
-];
-
-const CLOTHING_OPTIONS = [
-  { id: 'casual', label: 'Casual' },
-  { id: 'athletic', label: 'Athletic' },
-  { id: 'business', label: 'Business' },
-  { id: 'streetwear', label: 'Street' },
-];
-
-const BODY_OPTIONS = [
-  { id: 'lean', label: 'Lean' },
-  { id: 'average', label: 'Average' },
-  { id: 'athletic', label: 'Athletic' },
-  { id: 'broad', label: 'Broad' },
 ];
 
 const SKIN_ORDER = SKIN_TONE_ORDER;
@@ -272,24 +258,7 @@ export default function EditAvatarScreen() {
           />
         </Section>
 
-        {/* ── Clothing ─────────────────────────────────────── */}
-        <Section title="Clothing Style">
-          <ChipRow
-            options={CLOTHING_OPTIONS}
-            selected={config.clothingStyle}
-            onSelect={(v) => update('clothingStyle', v)}
-            accentColor={CLOTHING_ACCENTS[config.clothingStyle]}
-          />
-        </Section>
 
-        {/* ── Body Type ────────────────────────────────────── */}
-        <Section title="Body Type">
-          <ChipRow
-            options={BODY_OPTIONS}
-            selected={config.bodyType}
-            onSelect={(v) => update('bodyType', v)}
-          />
-        </Section>
       </ScrollView>
 
       {/* ── Sticky save footer ───────────────────────────────── */}
@@ -332,24 +301,21 @@ function ChipRow({
   options,
   selected,
   onSelect,
-  accentColor,
 }: {
   options: { id: string; label: string }[];
   selected: string;
   onSelect: (id: string) => void;
-  accentColor?: string;
 }) {
   return (
     <View style={styles.chipRow}>
       {options.map((o) => {
         const isActive = selected === o.id;
-        const activeBg = accentColor ?? Colors.gold;
         return (
           <Pressable
             key={o.id}
             style={({ pressed }) => [
               styles.chip,
-              isActive && { backgroundColor: activeBg, borderColor: activeBg },
+              isActive && { backgroundColor: Colors.gold, borderColor: Colors.gold },
               pressed && styles.pressed,
             ]}
             onPress={() => onSelect(o.id)}
