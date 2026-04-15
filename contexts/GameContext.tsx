@@ -2,6 +2,13 @@ import React, { createContext, useState, ReactNode, useEffect, useCallback, useR
 import { getSupabaseClient } from '@/template';
 import { CATEGORIES, QUEST_TEMPLATES, getXpProgress } from '@/constants/gameData';
 import { AuthContext } from '@/contexts/AuthContext';
+import {
+  calcComboBonusXp,
+  getStreakMilestone,
+  getWeeklyConsistencyReward,
+  buildDailyGratificationEvent,
+  DailyGratificationEvent,
+} from '@/constants/rewards';
 
 export interface AvatarConfig {
   genderPresentation: string;
@@ -72,7 +79,7 @@ interface GameContextType {
   setAvatar: (avatar: AvatarConfig) => Promise<void>;
   setActiveCategories: (categories: ActiveCategory[]) => Promise<void>;
   setActiveQuests: (quests: ActiveQuest[]) => Promise<void>;
-  completeQuest: (questId: string) => Promise<QuestCompletion | null>;
+  completeQuest: (questId: string) => Promise<{ completion: QuestCompletion; bonusXp: number; gratification: DailyGratificationEvent | null } | null>;
   useStreakSaver: () => Promise<boolean>;
   upgradeToPremium: () => void;
   resetWeek: () => void;
@@ -349,7 +356,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const completeQuest = async (questId: string): Promise<QuestCompletion | null> => {
+  const completeQuest = async (questId: string): Promise<{ completion: QuestCompletion; bonusXp: number; gratification: DailyGratificationEvent | null } | null> => {
     const userId = getUserId();
     const questTemplate = QUEST_TEMPLATES.find((q) => q.id === questId);
     if (!questTemplate) return null;
@@ -368,6 +375,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
       completedAt: new Date().toISOString(),
     };
 
+    // ── COMBO BONUS: count how many completions exist today (all quests) ──
+    const prevTodayCount = state.weeklyCompletions.filter((c) => c.completedAt.startsWith(today)).length;
+    const newTodayCount = prevTodayCount + 1;
+    const comboBonusXp = calcComboBonusXp(prevTodayCount, newTodayCount);
+
     // Persist to DB
     if (userId) {
       await supabase.from('quest_completions').insert({
@@ -380,6 +392,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       });
     }
 
+    let dailyGratification: DailyGratificationEvent | null = null;
+
     setState((prev) => {
       const newCompletions = [...prev.weeklyCompletions, completion];
       const { scores, fairnessScore } = computeCategoryScores(prev.activeCategories, newCompletions);
@@ -387,8 +401,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
       // Update streak
       const streak = { ...prev.streak };
       const lastDate = streak.lastCompletedDate;
+      let isNewDay = false;
 
       if (lastDate !== today) {
+        isNewDay = true;
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         const yesterdayStr = yesterday.toISOString().split('T')[0];
@@ -409,7 +425,22 @@ export function GameProvider({ children }: { children: ReactNode }) {
         streak.strongStreak = streak.dailyStreak;
       }
 
-      const newXp = prev.totalCharacterXp + completion.characterXp;
+      // ── DAILY GRATIFICATION EVENT ──────────────────────────────────────────
+      // Generated when a new streak day starts (first completion of the day).
+      // Includes milestone and weekly-consistency signals for future UI use.
+      if (isNewDay) {
+        dailyGratification = buildDailyGratificationEvent(streak.dailyStreak, today);
+      }
+
+      // ── STREAK MILESTONE BONUS XP ──────────────────────────────────────────
+      const streakMilestone = isNewDay ? getStreakMilestone(streak.dailyStreak) : null;
+      const weekReward = isNewDay ? getWeeklyConsistencyReward(streak.dailyStreak) : null;
+      const milestoneXp = streakMilestone?.bonusXp ?? weekReward?.bonusXp ?? 0;
+
+      // Total XP = base quest XP + combo bonus + milestone bonus
+      const totalBonusXp = comboBonusXp + milestoneXp;
+      const newXp = prev.totalCharacterXp + completion.characterXp + totalBonusXp;
+
       const badges = [...prev.badges];
       const newBadges: string[] = [];
       if (newXp >= 100 && !badges.includes('first_100xp')) { badges.push('first_100xp'); newBadges.push('first_100xp'); }
@@ -457,7 +488,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       };
     });
 
-    return completion;
+    return { completion, bonusXp: comboBonusXp, gratification: dailyGratification };
   };
 
   const useStreakSaver = async (): Promise<boolean> => {

@@ -164,11 +164,13 @@ export default function TargetSetup() {
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Set your ambition</Text>
+        <Text style={styles.title}>Set your weekly ambition</Text>
+        <Text style={styles.subtitle}>Choose how challenging you want this week to feel.</Text>
         <View style={styles.fairnessCard}>
           <MaterialIcons name="balance" size={16} color={Colors.info} />
           <Text style={styles.fairnessText}>
-            Your score is measured against your own target — not others. Every level stays fair.
+            Your progress is measured against your own target, so every level stays fair.{' '}
+            <Text style={styles.fairnessHighlight}>Consistency unlocks bonus XP and streak rewards.</Text>
           </Text>
         </View>
       </View>
@@ -270,6 +272,9 @@ const styles = StyleSheet.create({
 
   header: { paddingHorizontal: Spacing.xl, gap: Spacing.sm, marginBottom: Spacing.sm },
   title: { fontSize: FontSize.xxl, fontWeight: FontWeight.heavy, color: Colors.textPrimary },
+  subtitle: { fontSize: FontSize.md, color: Colors.textSecondary, lineHeight: 22, marginTop: 2 },
+
+  fairnessHighlight: { fontWeight: FontWeight.bold, color: Colors.info },
 
   fairnessCard: {
     flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm,
