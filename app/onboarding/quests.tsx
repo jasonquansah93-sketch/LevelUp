@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Dimensions } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -8,8 +8,45 @@ import { ActiveCategory, ActiveQuest } from '@/contexts/GameContext';
 import { useGame } from '@/hooks/useGame';
 import { useAuth } from '@/hooks/useAuth';
 import { Colors, Spacing, Radius, FontSize, FontWeight, CategoryColors } from '@/constants/theme';
+import { CoachmarkOverlay, CoachmarkStep } from '@/components/ui/CoachmarkOverlay';
 
 const MAX_QUESTS_PER_CAT = 2;
+
+// ── Coachmark step definitions ────────────────────────────────────────────
+function buildQuestSteps(screenHeight: number, topInset: number): CoachmarkStep[] {
+  return [
+    {
+      title: 'Each area has its own starter quests',
+      body: 'Switch between your selected categories and choose up to 2 quests per category.',
+      highlight: {
+        topFraction: (topInset + 130) / screenHeight,
+        height: 52,
+        horizontalInset: 16,
+      },
+      cardPosition: 'below',
+    },
+    {
+      title: 'Quests turn growth into action',
+      body: 'Each quest gives XP for your character and credits for weekly progress. Some also show a time estimate.',
+      highlight: {
+        topFraction: (topInset + 220) / screenHeight,
+        height: 110,
+        horizontalInset: 16,
+      },
+      cardPosition: 'below',
+    },
+    {
+      title: 'You can start now',
+      body: 'Pick your first quests or skip and begin with recommended defaults.',
+      highlight: {
+        topFraction: (screenHeight - 100) / screenHeight,
+        height: 58,
+        horizontalInset: 32,
+      },
+      cardPosition: 'above',
+    },
+  ];
+}
 
 export default function QuestSetup() {
   const router = useRouter();
@@ -84,9 +121,16 @@ export default function QuestSetup() {
 
   const totalSelected = Object.values(selectedQuests).reduce((s, q) => s + q.length, 0);
   const activeSelected = selectedQuests[activeTab]?.length || 0;
+  const { height: screenHeight } = Dimensions.get('window');
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* ── Coachmark overlay — first-time only ── */}
+      <CoachmarkOverlay
+        storageKey="coachmark_quests"
+        steps={buildQuestSteps(screenHeight, insets.top)}
+      />
+
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <MaterialIcons name="arrow-back" size={24} color={Colors.textSecondary} />

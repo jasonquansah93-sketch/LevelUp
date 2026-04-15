@@ -1,18 +1,46 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { CATEGORIES } from '@/constants/gameData';
 import { Colors, Spacing, Radius, FontSize, FontWeight, CategoryColors } from '@/constants/theme';
+import { CoachmarkOverlay, CoachmarkStep } from '@/components/ui/CoachmarkOverlay';
 
 const MAX_FREE = 3;
 const RECOMMENDED = ['fitness', 'focus', 'discipline'];
+
+// ── Coachmark step definitions ────────────────────────────────────────────
+function buildCategorySteps(screenHeight: number, topInset: number): CoachmarkStep[] {
+  return [
+    {
+      title: 'Choose up to 3 focus areas',
+      body: 'Pick the areas you want to improve first. These choices shape your starting journey.',
+      highlight: {
+        topFraction: (topInset + 130) / screenHeight,
+        height: screenHeight * 0.42,
+        horizontalInset: 16,
+      },
+      cardPosition: 'below',
+    },
+    {
+      title: 'Next, we\'ll suggest your first quests',
+      body: 'Based on your chosen areas, you\'ll pick a few simple actions to get started.',
+      highlight: {
+        topFraction: (screenHeight - 100) / screenHeight,
+        height: 58,
+        horizontalInset: 32,
+      },
+      cardPosition: 'above',
+    },
+  ];
+}
 
 export default function CategorySelection() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<string[]>(RECOMMENDED);
+  const { height: screenHeight } = Dimensions.get('window');
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -88,6 +116,12 @@ export default function CategorySelection() {
         </View>
         <View style={{ height: 120 }} />
       </ScrollView>
+
+      {/* ── Coachmark overlay — first-time only ── */}
+      <CoachmarkOverlay
+        storageKey="coachmark_categories"
+        steps={buildCategorySteps(screenHeight, insets.top)}
+      />
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
         <Pressable
