@@ -4,6 +4,9 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { QUEST_TEMPLATES, getCategoryById } from '@/constants/gameData';
+import { ActiveCategory, ActiveQuest } from '@/contexts/GameContext';
+import { useGame } from '@/hooks/useGame';
+import { useAuth } from '@/hooks/useAuth';
 import { Colors, Spacing, Radius, FontSize, FontWeight, CategoryColors } from '@/constants/theme';
 
 const MAX_QUESTS_PER_CAT = 2;
@@ -12,6 +15,8 @@ export default function QuestSetup() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ categories: string }>();
+  const { setActiveCategories, setActiveQuests } = useGame();
+  const { completeOnboarding } = useAuth();
 
   const selectedCategories: string[] = useMemo(() => {
     try { return JSON.parse(params.categories || '[]'); } catch { return []; }
@@ -36,11 +41,45 @@ export default function QuestSetup() {
     });
   };
 
-  const handleNext = () => {
-    router.push({
-      pathname: '/onboarding/targets',
-      params: { categories: JSON.stringify(selectedCategories), quests: JSON.stringify(selectedQuests) },
+  const handleNext = async () => {
+    // Apply standard intensity defaults for every selected category
+    const activeCategories: ActiveCategory[] = selectedCategories.map((catId) => {
+      const cat = getCategoryById(catId);
+      const weeklyTarget = cat?.weeklyTargetCredits?.standard ?? 8;
+      return { categoryId: catId, intensity: 'standard', weeklyTarget };
     });
+
+    // Build active quests — use selected quests, fall back to 2 cheapest defaults
+    const activeQuests: ActiveQuest[] = [];
+    for (const catId of selectedCategories) {
+      const questIds = selectedQuests[catId] || [];
+      const idsToUse = questIds.length > 0
+        ? questIds
+        : QUEST_TEMPLATES
+            .filter((q) => q.categoryId === catId)
+            .sort((a, b) => a.characterXp - b.characterXp)
+            .slice(0, 2)
+            .map((q) => q.id);
+
+      for (const questId of idsToUse) {
+        const template = QUEST_TEMPLATES.find((q) => q.id === questId);
+        if (template) {
+          activeQuests.push({
+            questId: template.id,
+            categoryId: template.categoryId,
+            name: template.name,
+            characterXp: template.characterXp,
+            weeklyCredits: template.weeklyCredits,
+            difficulty: template.difficulty,
+          });
+        }
+      }
+    }
+
+    await setActiveCategories(activeCategories);
+    await setActiveQuests(activeQuests);
+    await completeOnboarding();
+    router.replace('/(tabs)');
   };
 
   const totalSelected = Object.values(selectedQuests).reduce((s, q) => s + q.length, 0);
@@ -53,11 +92,11 @@ export default function QuestSetup() {
           <MaterialIcons name="arrow-back" size={24} color={Colors.textSecondary} />
         </Pressable>
         <View style={styles.progressTrack}>
-          {[0, 1, 2, 3].map((i) => (
-            <View key={i} style={[styles.dot, i === 3 && styles.dotActive]} />
+          {[0, 1, 2].map((i) => (
+            <View key={i} style={[styles.dot, i === 2 && styles.dotActive]} />
           ))}
         </View>
-        <Text style={styles.stepLabel}>4 of 4</Text>
+        <Text style={styles.stepLabel}>Step 3 of 3</Text>
       </View>
 
       <View style={styles.header}>
@@ -146,10 +185,10 @@ export default function QuestSetup() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
         <Pressable
           style={({ pressed }) => [styles.btn, pressed && styles.pressed]}
-          onPress={handleNext}
+          onPress={() => void handleNext()}
         >
           <Text style={styles.btnText}>
-            {totalSelected === 0 ? 'Skip & Use Defaults' : 'Set Targets'}
+            {totalSelected === 0 ? 'Skip & Start' : 'Start My Journey'}
           </Text>
           <MaterialIcons name="arrow-forward" size={20} color={Colors.textInverse} />
         </Pressable>

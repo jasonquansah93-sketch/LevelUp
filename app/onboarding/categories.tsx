@@ -30,11 +30,11 @@ export default function CategorySelection() {
           <MaterialIcons name="arrow-back" size={24} color={Colors.textSecondary} />
         </Pressable>
         <View style={styles.progressTrack}>
-          {[0, 1, 2, 3].map((i) => (
-            <View key={i} style={[styles.dot, i === 2 && styles.dotActive]} />
+          {[0, 1, 2].map((i) => (
+            <View key={i} style={[styles.dot, i === 1 && styles.dotActive]} />
           ))}
         </View>
-        <Text style={styles.stepLabel}>3 of 4</Text>
+        <Text style={styles.stepLabel}>Step 2 of 3</Text>
       </View>
 
       {/* Header */}

@@ -454,11 +454,11 @@ function StepBar({ onBack }: { onBack: () => void }) {
         <MaterialIcons name="arrow-back" size={24} color={Colors.textSecondary} />
       </Pressable>
       <View style={styles.progressTrack}>
-        {[0, 1, 2, 3].map((i) => (
-          <View key={i} style={[styles.progressDot, i === 1 && styles.progressDotActive]} />
+        {[0, 1, 2].map((i) => (
+          <View key={i} style={[styles.progressDot, i === 0 && styles.progressDotActive]} />
         ))}
       </View>
-      <Text style={styles.stepLabel}>Step 2 of 4</Text>
+      <Text style={styles.stepLabel}>Step 1 of 3</Text>
     </View>
   );
 }
