@@ -202,7 +202,7 @@ export default function ProfileScreen() {
               icon="notifications-none"
               label="Notifications"
               subtitle="Reminders and alerts"
-              onPress={() => Alert.alert('Notifications', 'Notification settings coming soon.')}
+              onPress={() => router.push('/notifications')}
             />
             <View style={styles.rowDivider} />
             <ProfileRow
