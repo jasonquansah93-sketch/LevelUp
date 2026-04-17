@@ -23,6 +23,8 @@ export default function RootLayout() {
               <Stack.Screen name="onboarding/targets" />
               <Stack.Screen name="edit-avatar" options={{ presentation: 'card', animation: 'slide_from_right' }} />
               <Stack.Screen name="notifications" options={{ presentation: 'card', animation: 'slide_from_right' }} />
+              <Stack.Screen name="manage-quests" options={{ presentation: 'card', animation: 'slide_from_right' }} />
+              <Stack.Screen name="manage-categories" options={{ presentation: 'card', animation: 'slide_from_right' }} />
               <Stack.Screen name="(tabs)" />
             </Stack>
           </GameProvider>

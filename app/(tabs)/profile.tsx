@@ -174,7 +174,7 @@ export default function ProfileScreen() {
               icon="apps"
               label="Manage Categories"
               subtitle={`${state.activeCategories.length} active`}
-              onPress={() => Alert.alert('Categories', 'Category manager coming soon.')}
+              onPress={() => router.push('/manage-categories')}
             />
             <View style={styles.rowDivider} />
             <ProfileRow
