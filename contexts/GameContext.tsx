@@ -9,6 +9,7 @@ import {
   buildDailyGratificationEvent,
   DailyGratificationEvent,
 } from '@/constants/rewards';
+import { markStreakSecuredToday } from '@/services/streakReminders';
 
 export interface AvatarConfig {
   genderPresentation: string;
@@ -430,6 +431,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
       // Includes milestone and weekly-consistency signals for future UI use.
       if (isNewDay) {
         dailyGratification = buildDailyGratificationEvent(streak.dailyStreak, today);
+      }
+
+      // ── STREAK SECURED: cancel any pending same-day reminders ───────────────
+      // Fire-and-forget — runs outside setState to avoid side-effects in reducer.
+      // We mark the streak as secured on the first completion that creates a new
+      // streak day (isNewDay), or on the very first completion when prevTodayCount === 0.
+      if (isNewDay || prevTodayCount === 0) {
+        void markStreakSecuredToday();
       }
 
       // ── STREAK MILESTONE BONUS XP ──────────────────────────────────────────
