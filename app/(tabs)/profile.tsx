@@ -181,7 +181,7 @@ export default function ProfileScreen() {
               icon="assignment"
               label="Manage Quests"
               subtitle={`${state.activeQuests.length} active quests`}
-              onPress={() => Alert.alert('Quests', 'Quest manager coming soon.')}
+              onPress={() => router.push('/manage-quests')}
             />
             <View style={styles.rowDivider} />
             <ProfileRow
