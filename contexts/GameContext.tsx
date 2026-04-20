@@ -162,6 +162,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const loadedForUser = useRef<string | null>(null);
 
+  // ── HYDRATION GUARD ────────────────────────────────────────────────────────
+  // Tracks whether loadGameData has successfully completed for the current user.
+  // No DB writes for XP/meta are allowed until this is true, preventing stale
+  // default values (totalCharacterXp: 0) from overwriting persisted real data.
+  const hydrationComplete = useRef(false);
+
   const supabase = getSupabaseClient();
 
   // Reload game data whenever auth user changes
@@ -169,9 +175,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const userId = auth?.session?.user?.id || null;
     if (userId && userId !== loadedForUser.current) {
       loadedForUser.current = userId;
+      hydrationComplete.current = false; // Reset guard for new/restored session
       loadGameData(userId);
     } else if (!userId && loadedForUser.current) {
       loadedForUser.current = null;
+      hydrationComplete.current = false;
       setState(INITIAL_STATE);
       setIsLoading(false);
     } else if (!userId) {
@@ -273,13 +281,22 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
       const { scores, fairnessScore } = computeCategoryScores(activeCategories, weeklyCompletions);
 
+      // ── SOURCE OF TRUTH: persisted meta is authoritative for long-term XP ──
+      // Use nullish coalescing (??) not logical OR (||) so that a legitimate
+      // persisted value of 0 XP is preserved rather than falling through to a
+      // default. meta === null only for a brand-new user with no row yet.
+      const persistedXp = meta != null ? (meta.total_character_xp ?? 0) : 0;
+      const persistedCompletions = meta != null ? (meta.all_time_completions ?? 0) : 0;
+
+      console.log('[Game] loadGameData complete — userId:', userId, 'XP:', persistedXp, 'allTime:', persistedCompletions);
+
       setState({
         avatar,
         activeCategories,
         activeQuests,
-        totalCharacterXp: meta?.total_character_xp || 0,
+        totalCharacterXp: persistedXp,
         weeklyCompletions,
-        allTimeCompletions: meta?.all_time_completions || 0,
+        allTimeCompletions: persistedCompletions,
         weeklyCategoryScores: scores,
         weeklyFairnessScore: fairnessScore,
         streak: streakData,
@@ -287,8 +304,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
         weekStartDate: currentWeekStart,
         isPremium: meta?.is_premium || false,
       });
+
+      // Mark hydration complete AFTER setState — DB writes are now safe
+      hydrationComplete.current = true;
     } catch (e) {
-      console.error('loadGameData error:', e);
+      console.error('[Game] loadGameData error:', e);
+      // Do NOT mark hydration complete on error. The guard stays active so no
+      // stale default values can be written back to the DB.
     } finally {
       setIsLoading(false);
     }
@@ -381,7 +403,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const newTodayCount = prevTodayCount + 1;
     const comboBonusXp = calcComboBonusXp(prevTodayCount, newTodayCount);
 
-    // Persist to DB
+    // Persist completion to DB
     if (userId) {
       await supabase.from('quest_completions').insert({
         user_id: userId,
@@ -427,16 +449,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
       }
 
       // ── DAILY GRATIFICATION EVENT ──────────────────────────────────────────
-      // Generated when a new streak day starts (first completion of the day).
-      // Includes milestone and weekly-consistency signals for future UI use.
       if (isNewDay) {
         dailyGratification = buildDailyGratificationEvent(streak.dailyStreak, today);
       }
 
-      // ── STREAK SECURED: cancel any pending same-day reminders ───────────────
-      // Fire-and-forget — runs outside setState to avoid side-effects in reducer.
-      // We mark the streak as secured on the first completion that creates a new
-      // streak day (isNewDay), or on the very first completion when prevTodayCount === 0.
+      // ── STREAK SECURED: cancel any pending same-day reminders ─────────────
       if (isNewDay || prevTodayCount === 0) {
         void markStreakSecuredToday();
       }
@@ -446,7 +463,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const weekReward = isNewDay ? getWeeklyConsistencyReward(streak.dailyStreak) : null;
       const milestoneXp = streakMilestone?.bonusXp ?? weekReward?.bonusXp ?? 0;
 
-      // Total XP = base quest XP + combo bonus + milestone bonus
+      // Total XP = base quest XP + combo bonus + milestone bonus.
+      // prev.totalCharacterXp comes from React's functional updater, so it is
+      // always the latest in-memory value — never a stale default.
       const totalBonusXp = comboBonusXp + milestoneXp;
       const newXp = prev.totalCharacterXp + completion.characterXp + totalBonusXp;
 
@@ -456,8 +475,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (streak.dailyStreak >= 7 && !badges.includes('streak_7')) { badges.push('streak_7'); newBadges.push('streak_7'); }
       if (prev.allTimeCompletions + 1 >= 30 && !badges.includes('no_zero_days')) { badges.push('no_zero_days'); newBadges.push('no_zero_days'); }
 
-      // Persist streak + meta to DB (fire and forget)
-      if (userId) {
+      // ── WRITE GUARD: only persist if hydration has completed ────────────────
+      // Prevents a race where this setState fires during app startup before
+      // loadGameData returns, which would write totalCharacterXp: 0 (the
+      // INITIAL_STATE default) back to the DB before the real value is loaded.
+      if (userId && hydrationComplete.current) {
         supabase.from('user_streaks').upsert({
           user_id: userId,
           daily_streak: streak.dailyStreak,
@@ -468,12 +490,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
           updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id' });
 
+        // Always include week_start_date so it is never silently dropped on upsert.
+        // total_character_xp is newXp — computed from prev (the authoritative
+        // in-memory state), never from INITIAL_STATE's 0.
         supabase.from('user_game_meta').upsert({
           user_id: userId,
           total_character_xp: newXp,
           all_time_completions: prev.allTimeCompletions + 1,
           is_premium: prev.isPremium,
           is_onboarded: true,
+          week_start_date: getWeekStart(),
           updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id' });
 
@@ -515,7 +541,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
         dailyStreak: prev.streak.dailyStreak + 1,
         lastCompletedDate: yesterdayStr,
       };
-      if (userId) {
+      // Apply write guard here too — streak savers are a user action so
+      // hydration is certainly complete by then, but the guard is cheap.
+      if (userId && hydrationComplete.current) {
         supabase.from('user_streaks').upsert({
           user_id: userId,
           daily_streak: newStreak.dailyStreak,
@@ -539,7 +567,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const currentWeekStart = getWeekStart();
     setState((prev) => {
       const { scores, fairnessScore } = computeCategoryScores(prev.activeCategories, []);
-      return { ...prev, weeklyCompletions: [], weeklyCategoryScores: scores, weeklyFairnessScore: fairnessScore, weekStartDate: currentWeekStart };
+      // RESET SAFETY: only clear weekly/transient fields.
+      // totalCharacterXp and allTimeCompletions are long-term character progress
+      // and must never be touched by a weekly reset.
+      return {
+        ...prev,
+        weeklyCompletions: [],
+        weeklyCategoryScores: scores,
+        weeklyFairnessScore: fairnessScore,
+        weekStartDate: currentWeekStart,
+        // totalCharacterXp — intentionally NOT reset
+        // allTimeCompletions — intentionally NOT reset
+      };
     });
   };
 
