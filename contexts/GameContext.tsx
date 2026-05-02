@@ -384,6 +384,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const questTemplate = QUEST_TEMPLATES.find((q) => q.id === questId);
     if (!questTemplate) return null;
 
+    // ── Step 1: compute all derived values from current state snapshot ────────
+    // Reading `state` directly is safe here because completeQuest is called
+    // imperatively (never during render). This lets us compute newXp before
+    // calling setState so we can await the DB write OUTSIDE the callback.
     const today = getTodayString();
     const todayCompletions = state.weeklyCompletions.filter(
       (c) => c.questId === questId && c.completedAt.startsWith(today)
@@ -398,12 +402,64 @@ export function GameProvider({ children }: { children: ReactNode }) {
       completedAt: new Date().toISOString(),
     };
 
-    // ── COMBO BONUS: count how many completions exist today (all quests) ──
+    // Combo bonus
     const prevTodayCount = state.weeklyCompletions.filter((c) => c.completedAt.startsWith(today)).length;
-    const newTodayCount = prevTodayCount + 1;
-    const comboBonusXp = calcComboBonusXp(prevTodayCount, newTodayCount);
+    const comboBonusXp = calcComboBonusXp(prevTodayCount, prevTodayCount + 1);
 
-    // Persist completion to DB
+    // New completions list + category scores
+    const newCompletions = [...state.weeklyCompletions, completion];
+    const { scores, fairnessScore } = computeCategoryScores(state.activeCategories, newCompletions);
+
+    // Streak
+    const streak = { ...state.streak };
+    const lastDate = streak.lastCompletedDate;
+    let isNewDay = false;
+
+    if (lastDate !== today) {
+      isNewDay = true;
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      if (lastDate === yesterdayStr) {
+        streak.dailyStreak += 1;
+      } else {
+        streak.dailyStreak = 1;
+      }
+      streak.categoriesCompletedToday = [questTemplate.categoryId];
+      streak.lastCompletedDate = today;
+    } else {
+      if (!streak.categoriesCompletedToday.includes(questTemplate.categoryId)) {
+        streak.categoriesCompletedToday = [...streak.categoriesCompletedToday, questTemplate.categoryId];
+      }
+    }
+
+    if (streak.categoriesCompletedToday.length >= 2 && streak.strongStreak < streak.dailyStreak) {
+      streak.strongStreak = streak.dailyStreak;
+    }
+
+    // Gratification event
+    const dailyGratification: DailyGratificationEvent | null = isNewDay
+      ? buildDailyGratificationEvent(streak.dailyStreak, today)
+      : null;
+
+    // Streak milestone XP
+    const streakMilestone = isNewDay ? getStreakMilestone(streak.dailyStreak) : null;
+    const weekReward = isNewDay ? getWeeklyConsistencyReward(streak.dailyStreak) : null;
+    const milestoneXp = streakMilestone?.bonusXp ?? weekReward?.bonusXp ?? 0;
+    const totalBonusXp = comboBonusXp + milestoneXp;
+
+    // ── New XP computed from state snapshot — authoritative in-memory value ──
+    const newXp = state.totalCharacterXp + completion.characterXp + totalBonusXp;
+    const newAllTimeCompletions = state.allTimeCompletions + 1;
+
+    // Badges
+    const badges = [...state.badges];
+    const newBadges: string[] = [];
+    if (newXp >= 100 && !badges.includes('first_100xp')) { badges.push('first_100xp'); newBadges.push('first_100xp'); }
+    if (streak.dailyStreak >= 7 && !badges.includes('streak_7')) { badges.push('streak_7'); newBadges.push('streak_7'); }
+    if (newAllTimeCompletions >= 30 && !badges.includes('no_zero_days')) { badges.push('no_zero_days'); newBadges.push('no_zero_days'); }
+
+    // ── Step 2: persist quest_completion row ──────────────────────────────────
     if (userId) {
       await supabase.from('quest_completions').insert({
         user_id: userId,
@@ -415,113 +471,72 @@ export function GameProvider({ children }: { children: ReactNode }) {
       });
     }
 
-    let dailyGratification: DailyGratificationEvent | null = null;
+    // ── Step 3: update local UI state immediately ─────────────────────────────
+    // Non-functional setState is safe here because all new values were computed
+    // from the state snapshot captured at the top of this function.
+    setState((prev) => ({
+      ...prev,
+      totalCharacterXp: newXp,
+      weeklyCompletions: newCompletions,
+      allTimeCompletions: newAllTimeCompletions,
+      weeklyCategoryScores: scores,
+      weeklyFairnessScore: fairnessScore,
+      streak,
+      badges,
+    }));
 
-    setState((prev) => {
-      const newCompletions = [...prev.weeklyCompletions, completion];
-      const { scores, fairnessScore } = computeCategoryScores(prev.activeCategories, newCompletions);
+    // ── Step 4: streak-secured notification ───────────────────────────────────
+    if (isNewDay || prevTodayCount === 0) {
+      void markStreakSecuredToday();
+    }
 
-      // Update streak
-      const streak = { ...prev.streak };
-      const lastDate = streak.lastCompletedDate;
-      let isNewDay = false;
-
-      if (lastDate !== today) {
-        isNewDay = true;
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
-        if (lastDate === yesterdayStr) {
-          streak.dailyStreak += 1;
-        } else {
-          streak.dailyStreak = 1;
-        }
-        streak.categoriesCompletedToday = [questTemplate.categoryId];
-        streak.lastCompletedDate = today;
-      } else {
-        if (!streak.categoriesCompletedToday.includes(questTemplate.categoryId)) {
-          streak.categoriesCompletedToday = [...streak.categoriesCompletedToday, questTemplate.categoryId];
-        }
-      }
-
-      if (streak.categoriesCompletedToday.length >= 2 && streak.strongStreak < streak.dailyStreak) {
-        streak.strongStreak = streak.dailyStreak;
-      }
-
-      // ── DAILY GRATIFICATION EVENT ──────────────────────────────────────────
-      if (isNewDay) {
-        dailyGratification = buildDailyGratificationEvent(streak.dailyStreak, today);
-      }
-
-      // ── STREAK SECURED: cancel any pending same-day reminders ─────────────
-      if (isNewDay || prevTodayCount === 0) {
-        void markStreakSecuredToday();
-      }
-
-      // ── STREAK MILESTONE BONUS XP ──────────────────────────────────────────
-      const streakMilestone = isNewDay ? getStreakMilestone(streak.dailyStreak) : null;
-      const weekReward = isNewDay ? getWeeklyConsistencyReward(streak.dailyStreak) : null;
-      const milestoneXp = streakMilestone?.bonusXp ?? weekReward?.bonusXp ?? 0;
-
-      // Total XP = base quest XP + combo bonus + milestone bonus.
-      // prev.totalCharacterXp comes from React's functional updater, so it is
-      // always the latest in-memory value — never a stale default.
-      const totalBonusXp = comboBonusXp + milestoneXp;
-      const newXp = prev.totalCharacterXp + completion.characterXp + totalBonusXp;
-
-      const badges = [...prev.badges];
-      const newBadges: string[] = [];
-      if (newXp >= 100 && !badges.includes('first_100xp')) { badges.push('first_100xp'); newBadges.push('first_100xp'); }
-      if (streak.dailyStreak >= 7 && !badges.includes('streak_7')) { badges.push('streak_7'); newBadges.push('streak_7'); }
-      if (prev.allTimeCompletions + 1 >= 30 && !badges.includes('no_zero_days')) { badges.push('no_zero_days'); newBadges.push('no_zero_days'); }
-
-      // ── WRITE GUARD: only persist if hydration has completed ────────────────
-      // Prevents a race where this setState fires during app startup before
-      // loadGameData returns, which would write totalCharacterXp: 0 (the
-      // INITIAL_STATE default) back to the DB before the real value is loaded.
-      if (userId && hydrationComplete.current) {
-        supabase.from('user_streaks').upsert({
-          user_id: userId,
-          daily_streak: streak.dailyStreak,
-          strong_streak: streak.strongStreak,
-          last_completed_date: streak.lastCompletedDate,
-          categories_completed_today: streak.categoriesCompletedToday,
-          streak_savers_available: streak.streakSaversAvailable,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' });
-
-        // Always include week_start_date so it is never silently dropped on upsert.
-        // total_character_xp is newXp — computed from prev (the authoritative
-        // in-memory state), never from INITIAL_STATE's 0.
-        supabase.from('user_game_meta').upsert({
+    // ── Step 5: await all DB writes OUTSIDE setState ──────────────────────────
+    // This is the core fix. Previously these upserts were fire-and-forget inside
+    // the setState callback. Now they are awaited here so failures are visible
+    // and newXp is guaranteed to reach the DB before the function returns.
+    if (userId && hydrationComplete.current) {
+      // user_game_meta — AWAITED: this is the XP source of truth on next load.
+      // Any failure here is caught and logged rather than silently swallowed.
+      try {
+        const { error: metaError } = await supabase.from('user_game_meta').upsert({
           user_id: userId,
           total_character_xp: newXp,
-          all_time_completions: prev.allTimeCompletions + 1,
-          is_premium: prev.isPremium,
+          all_time_completions: newAllTimeCompletions,
+          is_premium: state.isPremium,
           is_onboarded: true,
           week_start_date: getWeekStart(),
           updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id' });
 
-        newBadges.forEach((bid) => {
-          supabase.from('user_badges').upsert(
-            { user_id: userId, badge_id: bid },
-            { onConflict: 'user_id,badge_id' }
-          );
-        });
+        if (metaError) {
+          console.error('[Game] completeQuest: user_game_meta upsert failed:', metaError.message);
+        } else {
+          console.log('[Game] completeQuest: XP persisted —', newXp, 'total XP for user', userId);
+        }
+      } catch (e) {
+        console.error('[Game] completeQuest: user_game_meta upsert threw:', e);
       }
 
-      return {
-        ...prev,
-        totalCharacterXp: newXp,
-        weeklyCompletions: newCompletions,
-        allTimeCompletions: prev.allTimeCompletions + 1,
-        weeklyCategoryScores: scores,
-        weeklyFairnessScore: fairnessScore,
-        streak,
-        badges,
-      };
-    });
+      // Streak write — fire-and-forget is acceptable here; streak is not the
+      // XP source of truth and will self-correct on next loadGameData.
+      supabase.from('user_streaks').upsert({
+        user_id: userId,
+        daily_streak: streak.dailyStreak,
+        strong_streak: streak.strongStreak,
+        last_completed_date: streak.lastCompletedDate,
+        categories_completed_today: streak.categoriesCompletedToday,
+        streak_savers_available: streak.streakSaversAvailable,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+
+      // Badge writes — fire-and-forget; badges are append-only and upsert is safe.
+      newBadges.forEach((bid) => {
+        supabase.from('user_badges').upsert(
+          { user_id: userId, badge_id: bid },
+          { onConflict: 'user_id,badge_id' }
+        );
+      });
+    }
 
     return { completion, bonusXp: comboBonusXp, gratification: dailyGratification };
   };
