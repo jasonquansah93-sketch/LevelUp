@@ -517,17 +517,27 @@ export function GameProvider({ children }: { children: ReactNode }) {
         console.error('[Game] completeQuest: user_game_meta upsert threw:', e);
       }
 
-      // Streak write — fire-and-forget is acceptable here; streak is not the
-      // XP source of truth and will self-correct on next loadGameData.
-      supabase.from('user_streaks').upsert({
-        user_id: userId,
-        daily_streak: streak.dailyStreak,
-        strong_streak: streak.strongStreak,
-        last_completed_date: streak.lastCompletedDate,
-        categories_completed_today: streak.categoriesCompletedToday,
-        streak_savers_available: streak.streakSaversAvailable,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' });
+      // user_streaks — AWAITED: streak must persist reliably.
+      // Fire-and-forget was the cause of streak falling back to 0 on reopen.
+      try {
+        const { error: streakError } = await supabase.from('user_streaks').upsert({
+          user_id: userId,
+          daily_streak: streak.dailyStreak,
+          strong_streak: streak.strongStreak,
+          last_completed_date: streak.lastCompletedDate,
+          categories_completed_today: streak.categoriesCompletedToday,
+          streak_savers_available: streak.streakSaversAvailable,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+
+        if (streakError) {
+          console.error('[Game] completeQuest: user_streaks upsert failed:', streakError.message);
+        } else {
+          console.log('[Game] completeQuest: streak persisted — daily:', streak.dailyStreak, 'last:', streak.lastCompletedDate);
+        }
+      } catch (e) {
+        console.error('[Game] completeQuest: user_streaks upsert threw:', e);
+      }
 
       // Badge writes — fire-and-forget; badges are append-only and upsert is safe.
       newBadges.forEach((bid) => {
